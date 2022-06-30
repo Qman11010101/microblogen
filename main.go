@@ -69,20 +69,23 @@ func main() {
 
 	client := microcms.New(Config.Servicedomain, Config.Apikey)
 
-	var conts ContentList
+	// 新規記事・更新記事のチェック
+	var minimumContent ContentList
 
 	err = client.List(
 		microcms.ListParams{
 			Endpoint: "article",
-			Fields:   []string{"id", "title", "publishedAt", "updatedAt", "category.id", "category.name"},
-			Limit:    10000, // 無料枠リミット
-		}, &conts)
+			// Fields:   []string{"id", "title", "publishedAt", "updatedAt", "category.id", "category.name"},
+			Fields: []string{"id", "updatedAt"},
+			Limit:  10000, // 無料枠リミット
+		}, &minimumContent)
 
 	if err != nil {
 		fmt.Println("Error: ", err)
 		return
 	}
 
-	fmt.Printf("%+v\n", conts)
+	fmt.Printf("%+v\n", minimumContent)
 
+	// 古いJSONがなければこれのcontentsだけ保存して、あればそれと比較して更新があればレンダリングする
 }

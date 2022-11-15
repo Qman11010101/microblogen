@@ -75,7 +75,7 @@ func main() {
 		microcms.ListParams{
 			Endpoint: "article",
 			// Fields:   []string{"id", "title", "publishedAt", "updatedAt", "category.id", "category.name"},
-			Fields: []string{"id", "updatedAt"},
+			Fields: []string{"id", "title", "publishedAt", "updatedAt", "category.id"},
 			Limit:  10000, // 無料枠リミット
 		}, &minimumContent)
 
@@ -84,11 +84,28 @@ func main() {
 		return
 	}
 
-	// fmt.Printf("%+v\n", minimumContent)
+	fmt.Println(minimumContent)
+
 	for i := 0; i < len(minimumContent.Contents); i++ {
 		fmt.Printf("%+v\n", minimumContent.Contents[i])
 	}
 
 	// 古いJSONがなければこれのcontentsだけ保存して、あればそれと比較して更新があればレンダリングする
 
+	// 古いJSONとの比較
+	if !fileExists(Config.Exportpath + "/articles.json") {
+		fp, err := os.Create(Config.Exportpath + "/articles.json")
+		if err != nil {
+			fmt.Println("Error: ", err)
+			return
+		}
+		defer fp.Close()
+
+		s, err := json.Marshal(minimumContent.Contents)
+		if err != nil {
+			fmt.Println("Error: ", err)
+			return
+		}
+		fp.WriteString(string(s))
+	}
 }

@@ -3,7 +3,6 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"time"
 
@@ -55,7 +54,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	f, err := ioutil.ReadFile(configFile)
+	f, err := os.ReadFile(configFile)
 	if err != nil {
 		fmt.Println("Error: ", err)
 		return
@@ -85,7 +84,11 @@ func main() {
 		return
 	}
 
-	fmt.Printf("%+v\n", minimumContent)
+	// fmt.Printf("%+v\n", minimumContent)
+	for i := 0; i < len(minimumContent.Contents); i++ {
+		fmt.Printf("%+v\n", minimumContent.Contents[i])
+	}
 
 	// 古いJSONがなければこれのcontentsだけ保存して、あればそれと比較して更新があればレンダリングする
+
 }

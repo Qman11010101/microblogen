@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"html/template"
+	"math"
 	"os"
 	"time"
 
@@ -13,7 +14,7 @@ import (
 const configFile = "config.json"
 const VERSION = "0.0.1"
 
-type ConfigJson struct {
+type ConfigStruct struct {
 	Apikey        string `json:"APIkey"`
 	Servicedomain string `json:"serviceDomain"`
 	Exportpath    string `json:"exportPath"`
@@ -22,10 +23,10 @@ type ConfigJson struct {
 }
 
 type ContentList struct {
-	Contents   []Contents `json:"contents"`
-	Totalcount int        `json:"totalCount"`
-	Offset     int        `json:"offset"`
-	Limit      int        `json:"limit"`
+	Contents   []Content `json:"contents"`
+	Totalcount int       `json:"totalCount"`
+	Offset     int       `json:"offset"`
+	Limit      int       `json:"limit"`
 }
 type Body struct {
 	Fieldid string `json:"fieldId"`
@@ -35,16 +36,16 @@ type Category struct {
 	ID   string `json:"id"`
 	Name string `json:"name"`
 }
-type Contents struct {
-	ID          string     `json:"id"`
-	Title       string     `json:"title"`
-	Body        []Body     `json:"body"`
-	PublishedAt time.Time  `json:"publishedAt"`
-	UpdatedAt   time.Time  `json:"updatedAt"`
-	Category    []Category `json:"category"`
+type Content struct {
+	ID          string     `json:"id,omitempty"`
+	Title       string     `json:"title,omitempty"`
+	Body        []Body     `json:"body,omitempty"`
+	PublishedAt time.Time  `json:"publishedAt,omitempty"`
+	UpdatedAt   time.Time  `json:"updatedAt,omitempty"`
+	Category    []Category `json:"category,omitempty"`
 }
 
-var Config ConfigJson
+var Config ConfigStruct
 
 // Utility Function
 
@@ -60,34 +61,54 @@ func main() {
 
 	// arguments := os.Args[1:]
 
-	// config.json読み込み
-	if !fileExists(configFile) {
+	// config.json読み込み→なかったら環境変数から読み込む
+	if fileExists(configFile) {
+		configFileBytes, err := os.ReadFile(configFile)
+		if err != nil {
+			fmt.Println("Error: ", err)
+			return
+		}
+
+		err = json.Unmarshal([]byte(configFileBytes), &Config)
+		if err != nil {
+			fmt.Println("Error: ", err)
+			return
+		}
+
+	} else {
 		fmt.Println("Error: Missing " + configFile)
 		os.Exit(1)
-	}
-
-	configFileBytes, err := os.ReadFile(configFile)
-	if err != nil {
-		fmt.Println("Error: ", err)
-		return
-	}
-
-	err = json.Unmarshal([]byte(configFileBytes), &Config)
-	if err != nil {
-		fmt.Println("Error: ", err)
-		return
 	}
 
 	articlesJsonPath := Config.Exportpath + "/articles.json"
 
 	client := microcms.New(Config.Servicedomain, Config.Apikey)
 
-	// 先にミニマムな全部入りのやつ落としてcontent数を取得しておく
+	// 先にミニマムなlatest用のやつ落としてcontent数を取得しておく
+	var articlesLatest ContentList
+
+	err := client.List(
+		microcms.ListParams{
+			Endpoint: "article",
+			Fields:   []string{"id", "title", "publishedAt", "updatedAt", "category.id", "category.name"},
+			Limit:    5,
+			Orders:   []string{"-publishedAt"},
+		}, &articlesLatest)
+
+	if err != nil {
+		panic(err)
+	}
+
+	contentsCount := articlesLatest.Totalcount
+	loopsCount := int(math.Ceil(float64(contentsCount) / float64(Config.PageShowLimit)))
+
+	for i := 0; i < loopsCount; i++ {
+
+	}
 
 	// for内に入れる
 	var articlesInfo ContentList
 
-	// 公開されていない記事は載らない
 	err = client.List(
 		microcms.ListParams{
 			Endpoint: "article",
@@ -96,16 +117,8 @@ func main() {
 		}, &articlesInfo)
 
 	if err != nil {
-		fmt.Println("Error: ", err)
-		return
+		panic(err)
 	}
-
-	// TODO: あとで消す
-	fmt.Println("Latest Contents:")
-	for i := 0; i < len(articlesInfo.Contents); i++ {
-		fmt.Printf("%+v\n", articlesInfo.Contents[i])
-	}
-	// TODO: あとで消す
 
 	// 記事のJSONがなければ生成して書き込む
 	if !fileExists(articlesJsonPath) {
@@ -118,29 +131,21 @@ func main() {
 
 		s, err := json.Marshal(articlesInfo.Contents)
 		if err != nil {
-			fmt.Println("Error: ", err)
-			return
+			panic(err)
 		}
 		articlesFile.WriteString(string(s))
 	}
 
-	var currentArticles []Contents
+	var currentArticles []Content
 
 	articlesJsonBytes, err := os.ReadFile(articlesJsonPath)
 	if err != nil {
-		fmt.Println("Error: ", err)
-		return
+		panic(err)
 	}
 
 	err = json.Unmarshal([]byte(articlesJsonBytes), &currentArticles)
 	if err != nil {
-		fmt.Println("Error: ", err)
-		return
-	}
-
-	fmt.Println("Current Contents:")
-	for i := 0; i < len(currentArticles); i++ {
-		fmt.Printf("%+v\n", currentArticles[i])
+		panic(err)
 	}
 
 	// とりあえず全レンダリング作ってみる→currentは使わずlatestのみ
@@ -152,13 +157,11 @@ func main() {
 	indexTemplate := template.Must(template.New("index.html").Funcs(functionMapping).ParseFiles(Config.Templatepath + "/index.html"))
 	indexOutputFile, err := os.Create(Config.Exportpath + "/index.html")
 	if err != nil {
-		fmt.Println("Error: ", err)
-		return
+		panic(err)
 	}
 	defer indexOutputFile.Close()
 
 	if err = indexTemplate.Execute(indexOutputFile, articlesInfo.Contents); err != nil {
-		fmt.Println("Error: ", err)
-		return
+		panic(err)
 	}
 }

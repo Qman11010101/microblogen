@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"html/template"
 	"os"
 	"time"
 
@@ -17,21 +18,30 @@ type ConfigJson struct {
 	Servicedomain string `json:"serviceDomain"`
 	Exportpath    string `json:"exportPath"`
 	Templatepath  string `json:"templatePath"`
-}
-
-type Content struct {
-	ID          string    `json:"id,omitempty"`
-	Title       string    `json:"title,omitempty"`
-	Body        string    `json:"body,omitempty"`
-	PublishedAt time.Time `json:"publishedAt,omitempty"`
-	UpdatedAt   time.Time `json:"updatedAt,omitempty"`
+	PageShowLimit int    `json:"pageShowLimit"`
 }
 
 type ContentList struct {
-	Contents   []Content
-	TotalCount int
-	Limit      int
-	Offset     int
+	Contents   []Contents `json:"contents"`
+	Totalcount int        `json:"totalCount"`
+	Offset     int        `json:"offset"`
+	Limit      int        `json:"limit"`
+}
+type Body struct {
+	Fieldid string `json:"fieldId"`
+	Body    string `json:"body"`
+}
+type Category struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+}
+type Contents struct {
+	ID          string     `json:"id"`
+	Title       string     `json:"title"`
+	Body        []Body     `json:"body"`
+	PublishedAt time.Time  `json:"publishedAt"`
+	UpdatedAt   time.Time  `json:"updatedAt"`
+	Category    []Category `json:"category"`
 }
 
 var Config ConfigJson
@@ -68,19 +78,22 @@ func main() {
 		return
 	}
 
+	articlesJsonPath := Config.Exportpath + "/articles.json"
+
 	client := microcms.New(Config.Servicedomain, Config.Apikey)
 
-	// 新規記事・更新記事のチェック
-	var latestContentsInfo ContentList
+	// 先にミニマムな全部入りのやつ落としてcontent数を取得しておく
+
+	// for内に入れる
+	var articlesInfo ContentList
 
 	// 公開されていない記事は載らない
 	err = client.List(
 		microcms.ListParams{
 			Endpoint: "article",
-			// Fields:   []string{"id", "title", "publishedAt", "updatedAt", "category.id", "category.name"},
-			Fields: []string{"id", "title", "publishedAt", "updatedAt", "category.id"},
-			Limit:  10000, // 無料枠リミット
-		}, &latestContentsInfo)
+			Fields:   []string{"id", "title", "body", "publishedAt", "updatedAt", "category.id", "category.name"},
+			Limit:    Config.PageShowLimit,
+		}, &articlesInfo)
 
 	if err != nil {
 		fmt.Println("Error: ", err)
@@ -89,12 +102,10 @@ func main() {
 
 	// TODO: あとで消す
 	fmt.Println("Latest Contents:")
-	for i := 0; i < len(latestContentsInfo.Contents); i++ {
-		fmt.Printf("%+v\n", latestContentsInfo.Contents[i])
+	for i := 0; i < len(articlesInfo.Contents); i++ {
+		fmt.Printf("%+v\n", articlesInfo.Contents[i])
 	}
 	// TODO: あとで消す
-
-	articlesJsonPath := Config.Exportpath + "/articles.json"
 
 	// 記事のJSONがなければ生成して書き込む
 	if !fileExists(articlesJsonPath) {
@@ -105,7 +116,7 @@ func main() {
 		}
 		defer articlesFile.Close()
 
-		s, err := json.Marshal(latestContentsInfo.Contents)
+		s, err := json.Marshal(articlesInfo.Contents)
 		if err != nil {
 			fmt.Println("Error: ", err)
 			return
@@ -113,7 +124,7 @@ func main() {
 		articlesFile.WriteString(string(s))
 	}
 
-	var currentArticles []Content
+	var currentArticles []Contents
 
 	articlesJsonBytes, err := os.ReadFile(articlesJsonPath)
 	if err != nil {
@@ -132,9 +143,22 @@ func main() {
 		fmt.Printf("%+v\n", currentArticles[i])
 	}
 
-	// 差分レンダリング条件:
-	// ・IDに該当する記事がない
-	// ・UpdatedAtが違う
+	// とりあえず全レンダリング作ってみる→currentは使わずlatestのみ
+	// ヘルパー関数: datetimeのフォーマット
+	functionMapping := template.FuncMap{
+		"formatTime": func(t time.Time) string { return t.Format("2006-01-02") },
+	}
+	// トップページ(index.html)レンダリング: articlesInfoを使う
+	indexTemplate := template.Must(template.New("index.html").Funcs(functionMapping).ParseFiles(Config.Templatepath + "/index.html"))
+	indexOutputFile, err := os.Create(Config.Exportpath + "/index.html")
+	if err != nil {
+		fmt.Println("Error: ", err)
+		return
+	}
+	defer indexOutputFile.Close()
 
-	//
+	if err = indexTemplate.Execute(indexOutputFile, articlesInfo.Contents); err != nil {
+		fmt.Println("Error: ", err)
+		return
+	}
 }

@@ -6,9 +6,11 @@ import (
 	"html/template"
 	"math"
 	"os"
+	"strconv"
 	"time"
 
 	"github.com/microcmsio/microcms-go-sdk"
+	"github.com/otiai10/copy"
 )
 
 const configFile = "config.json"
@@ -19,6 +21,7 @@ type ConfigStruct struct {
 	Servicedomain string `json:"serviceDomain"`
 	Exportpath    string `json:"exportPath"`
 	Templatepath  string `json:"templatePath"`
+	AssetsDirName string `json:"assetsDirName"`
 	PageShowLimit int    `json:"pageShowLimit"`
 }
 
@@ -27,6 +30,8 @@ type ContentList struct {
 	Totalcount int       `json:"totalCount"`
 	Offset     int       `json:"offset"`
 	Limit      int       `json:"limit"`
+	NextPage   int
+	PrevPage   int
 }
 type Body struct {
 	Fieldid string `json:"fieldId"`
@@ -65,14 +70,12 @@ func main() {
 	if fileExists(configFile) {
 		configFileBytes, err := os.ReadFile(configFile)
 		if err != nil {
-			fmt.Println("Error: ", err)
-			return
+			panic(err)
 		}
 
 		err = json.Unmarshal([]byte(configFileBytes), &Config)
 		if err != nil {
-			fmt.Println("Error: ", err)
-			return
+			panic(err)
 		}
 
 	} else {
@@ -80,11 +83,34 @@ func main() {
 		os.Exit(1)
 	}
 
-	articlesJsonPath := Config.Exportpath + "/articles.json"
+	if !fileExists(Config.Templatepath) || !fileExists(Config.Templatepath+"/article.html") || !fileExists(Config.Templatepath+"/index.html") {
+		fmt.Println("Error: Missing templates. You must prepare \"article.html\" and \"index.html\" inside ./" + Config.Templatepath + ".")
+		os.Exit(1)
+	}
+
+	// 出力フォルダ削除
+	if fileExists(Config.Exportpath) {
+		if err := os.RemoveAll(Config.Exportpath); err != nil {
+			panic(err)
+		}
+	}
+
+	// 出力フォルダ生成
+	os.Mkdir(Config.Exportpath, 0777)
+
+	// アセットのコピー
+	if fileExists(Config.Templatepath + "/" + Config.AssetsDirName) {
+		err := copy.Copy(Config.Templatepath+"/"+Config.AssetsDirName, Config.Exportpath+"/"+Config.AssetsDirName)
+		if err != nil {
+			panic(err)
+		}
+	}
+
+	latestArticlesJsonPath := Config.Exportpath + "/latest.json"
 
 	client := microcms.New(Config.Servicedomain, Config.Apikey)
 
-	// 先にミニマムなlatest用のやつ落としてcontent数を取得しておく
+	// 先にミニマムなlatest用のやつ落としてcontent数(totalCount)を取得できるようにしておく
 	var articlesLatest ContentList
 
 	err := client.List(
@@ -99,69 +125,69 @@ func main() {
 		panic(err)
 	}
 
-	contentsCount := articlesLatest.Totalcount
-	loopsCount := int(math.Ceil(float64(contentsCount) / float64(Config.PageShowLimit)))
-
-	for i := 0; i < loopsCount; i++ {
-
-	}
-
-	// for内に入れる
-	var articlesInfo ContentList
-
-	err = client.List(
-		microcms.ListParams{
-			Endpoint: "article",
-			Fields:   []string{"id", "title", "body", "publishedAt", "updatedAt", "category.id", "category.name"},
-			Limit:    Config.PageShowLimit,
-		}, &articlesInfo)
-
+	// 最新記事のJSONを入れておく
+	articlesFile, err := os.Create(latestArticlesJsonPath)
 	if err != nil {
 		panic(err)
 	}
+	defer articlesFile.Close()
 
-	// 記事のJSONがなければ生成して書き込む
-	if !fileExists(articlesJsonPath) {
-		articlesFile, err := os.Create(articlesJsonPath)
-		if err != nil {
-			fmt.Println("Error: ", err)
-			return
-		}
-		defer articlesFile.Close()
+	s, err := json.Marshal(articlesLatest.Contents)
+	if err != nil {
+		panic(err)
+	}
+	articlesFile.WriteString(string(s))
 
-		s, err := json.Marshal(articlesInfo.Contents)
+	contentsCount := articlesLatest.Totalcount
+	pageLimit := Config.PageShowLimit
+	loopsCount := int(math.Ceil(float64(contentsCount) / float64(pageLimit)))
+
+	for i := 0; i < loopsCount; i++ {
+		var articlesPart ContentList
+
+		err := client.List(
+			microcms.ListParams{
+				Endpoint: "article",
+				Fields:   []string{"id", "title", "body", "publishedAt", "updatedAt", "category.id", "category.name"},
+				Limit:    pageLimit,
+				Offset:   pageLimit * i,
+				Orders:   []string{"-publishedAt"},
+			}, &articlesPart)
+
 		if err != nil {
 			panic(err)
 		}
-		articlesFile.WriteString(string(s))
-	}
 
-	var currentArticles []Content
+		articlesPart.NextPage = i + 2
+		articlesPart.PrevPage = i
 
-	articlesJsonBytes, err := os.ReadFile(articlesJsonPath)
-	if err != nil {
-		panic(err)
-	}
+		fmt.Println(articlesPart.Limit, articlesPart.Offset, articlesPart.Totalcount)
 
-	err = json.Unmarshal([]byte(articlesJsonBytes), &currentArticles)
-	if err != nil {
-		panic(err)
-	}
+		// ヘルパー関数: datetimeのフォーマット
+		functionMapping := template.FuncMap{
+			"formatTime":   func(t time.Time) string { return t.Format("2006-01-02") },
+			"totalGreater": func(total, limit int) bool { return total > limit },
+			"isNotFirst":   func(offset int) bool { return offset != 0 },
+			"isNotLast":    func(limit, offset, total int) bool { return limit+offset < total },
+		}
+		// トップページ(index.html)レンダリング: articlesInfoを使う
+		indexTemplate := template.Must(template.New("index.html").Funcs(functionMapping).ParseFiles(Config.Templatepath + "/index.html"))
+		var outputFilePath string
+		if i == 0 {
+			outputFilePath = Config.Exportpath + "/index.html"
+		} else {
+			outputBasePath := Config.Exportpath + "/page/" + strconv.Itoa(i+1)
+			os.MkdirAll(outputBasePath, 0755)
+			outputFilePath = outputBasePath + "/index.html"
+		}
+		indexOutputFile, err := os.Create(outputFilePath)
+		if err != nil {
+			panic(err)
+		}
+		defer indexOutputFile.Close()
 
-	// とりあえず全レンダリング作ってみる→currentは使わずlatestのみ
-	// ヘルパー関数: datetimeのフォーマット
-	functionMapping := template.FuncMap{
-		"formatTime": func(t time.Time) string { return t.Format("2006-01-02") },
-	}
-	// トップページ(index.html)レンダリング: articlesInfoを使う
-	indexTemplate := template.Must(template.New("index.html").Funcs(functionMapping).ParseFiles(Config.Templatepath + "/index.html"))
-	indexOutputFile, err := os.Create(Config.Exportpath + "/index.html")
-	if err != nil {
-		panic(err)
-	}
-	defer indexOutputFile.Close()
-
-	if err = indexTemplate.Execute(indexOutputFile, articlesInfo.Contents); err != nil {
-		panic(err)
+		if err := indexTemplate.Execute(indexOutputFile, articlesPart); err != nil {
+			panic(err)
+		}
 	}
 }

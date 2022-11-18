@@ -3,10 +3,10 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"html/template"
 	"math"
 	"os"
 	"strconv"
+	"text/template"
 	"time"
 
 	"github.com/microcmsio/microcms-go-sdk"
@@ -97,6 +97,7 @@ func main() {
 
 	// 出力フォルダ生成
 	os.Mkdir(Config.Exportpath, 0777)
+	os.Mkdir(Config.Exportpath+"/articles", 0777)
 
 	// アセットのコピー
 	if fileExists(Config.Templatepath + "/" + Config.AssetsDirName) {
@@ -138,6 +139,8 @@ func main() {
 	}
 	articlesFile.WriteString(string(s))
 
+	// TODO: 先にタグ記事/時期記事生成しとく？
+
 	contentsCount := articlesLatest.Totalcount
 	pageLimit := Config.PageShowLimit
 	loopsCount := int(math.Ceil(float64(contentsCount) / float64(pageLimit)))
@@ -161,16 +164,15 @@ func main() {
 		articlesPart.NextPage = i + 2
 		articlesPart.PrevPage = i
 
-		fmt.Println(articlesPart.Limit, articlesPart.Offset, articlesPart.Totalcount)
-
-		// ヘルパー関数: datetimeのフォーマット
+		// ヘルパー関数
 		functionMapping := template.FuncMap{
 			"formatTime":   func(t time.Time) string { return t.Format("2006-01-02") },
 			"totalGreater": func(total, limit int) bool { return total > limit },
 			"isNotFirst":   func(offset int) bool { return offset != 0 },
 			"isNotLast":    func(limit, offset, total int) bool { return limit+offset < total },
 		}
-		// トップページ(index.html)レンダリング: articlesInfoを使う
+
+		// トップページ(index.html)レンダリング
 		indexTemplate := template.Must(template.New("index.html").Funcs(functionMapping).ParseFiles(Config.Templatepath + "/index.html"))
 		var outputFilePath string
 		if i == 0 {
@@ -188,6 +190,22 @@ func main() {
 
 		if err := indexTemplate.Execute(indexOutputFile, articlesPart); err != nil {
 			panic(err)
+		}
+
+		// 記事(article.html)レンダリング
+		for a := 0; a < len(articlesPart.Contents); a++ {
+			articleTemplate := template.Must(template.New("article.html").Funcs(functionMapping).ParseFiles(Config.Templatepath + "/article.html"))
+			outputFilePath := Config.Exportpath + "/articles/" + articlesPart.Contents[a].ID + ".html"
+			articleOutputFile, err := os.Create(outputFilePath)
+			if err != nil {
+				panic(err)
+			}
+			defer articleOutputFile.Close()
+
+			if err := articleTemplate.Execute(articleOutputFile, articlesPart.Contents[a]); err != nil {
+				panic(err)
+			}
+
 		}
 	}
 }

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math"
 	"os"
+	"regexp"
 	"strconv"
 	"text/template"
 	"time"
@@ -38,8 +39,9 @@ type Body struct {
 	Body    string `json:"body"`
 }
 type Category struct {
-	ID   string `json:"id"`
-	Name string `json:"name"`
+	ID       string `json:"id"`
+	Name     string `json:"name"`
+	Articles []Content
 }
 type Content struct {
 	ID          string     `json:"id,omitempty"`
@@ -48,6 +50,13 @@ type Content struct {
 	PublishedAt time.Time  `json:"publishedAt,omitempty"`
 	UpdatedAt   time.Time  `json:"updatedAt,omitempty"`
 	Category    []Category `json:"category,omitempty"`
+}
+
+type ContentCategoryList struct {
+	Contents   []Category `json:"contents,omitempty"`
+	Totalcount int        `json:"totalCount,omitempty"`
+	Offset     int        `json:"offset,omitempty"`
+	Limit      int        `json:"limit,omitempty"`
 }
 
 var Config ConfigStruct
@@ -64,9 +73,9 @@ func fileExists(name string) bool {
 func main() {
 	fmt.Println("microblogen v" + VERSION)
 
+	// ID引数に取って差分レンダリングできそう？
 	// arguments := os.Args[1:]
 
-	// config.json読み込み→なかったら環境変数から読み込む
 	if fileExists(configFile) {
 		configFileBytes, err := os.ReadFile(configFile)
 		if err != nil {
@@ -79,7 +88,8 @@ func main() {
 		}
 
 	} else {
-		fmt.Println("Error: Missing " + configFile)
+		// TODO: 環境変数からの読み込みを実装する
+		fmt.Println(configFile + " not found. Loading the setting values from environment variables...")
 		os.Exit(1)
 	}
 
@@ -96,8 +106,7 @@ func main() {
 	}
 
 	// 出力フォルダ生成
-	os.Mkdir(Config.Exportpath, 0777)
-	os.Mkdir(Config.Exportpath+"/articles", 0777)
+	os.MkdirAll(Config.Exportpath+"/articles/category", 0777)
 
 	// アセットのコピー
 	if fileExists(Config.Templatepath + "/" + Config.AssetsDirName) {
@@ -108,6 +117,7 @@ func main() {
 	}
 
 	latestArticlesJsonPath := Config.Exportpath + "/latest.json"
+	categoriesJsonPath := Config.Exportpath + "/category.json"
 
 	client := microcms.New(Config.Servicedomain, Config.Apikey)
 
@@ -126,7 +136,7 @@ func main() {
 		panic(err)
 	}
 
-	// 最新記事のJSONを入れておく
+	// 最新記事のJSONを保存
 	articlesFile, err := os.Create(latestArticlesJsonPath)
 	if err != nil {
 		panic(err)
@@ -139,7 +149,33 @@ func main() {
 	}
 	articlesFile.WriteString(string(s))
 
-	// TODO: 先にタグ記事/時期記事生成しとく？
+	// カテゴリ(タグ)の構造体
+	var categoriesList ContentCategoryList
+
+	err = client.List(
+		microcms.ListParams{
+			Endpoint: "category",
+			Fields:   []string{"id", "name"},
+			Limit:    10000, // 無料枠リミット
+		},
+		&categoriesList,
+	)
+	if err != nil {
+		panic(err)
+	}
+
+	// カテゴリ(タグ)のJSONを保存
+	categoriesFile, err := os.Create(categoriesJsonPath)
+	if err != nil {
+		panic(err)
+	}
+	defer categoriesFile.Close()
+
+	x, err := json.Marshal(categoriesList.Contents)
+	if err != nil {
+		panic(err)
+	}
+	categoriesFile.WriteString(string(x))
 
 	contentsCount := articlesLatest.Totalcount
 	pageLimit := Config.PageShowLimit
@@ -164,12 +200,19 @@ func main() {
 		articlesPart.NextPage = i + 2
 		articlesPart.PrevPage = i
 
+		// trim用正規表現
+		htmlTagTrimReg := regexp.MustCompile(`<.*?>`)
+
 		// ヘルパー関数
 		functionMapping := template.FuncMap{
 			"formatTime":   func(t time.Time) string { return t.Format("2006-01-02") },
 			"totalGreater": func(total, limit int) bool { return total > limit },
 			"isNotFirst":   func(offset int) bool { return offset != 0 },
 			"isNotLast":    func(limit, offset, total int) bool { return limit+offset < total },
+			"trimSample": func(body string) string {
+				r := []rune(htmlTagTrimReg.ReplaceAllString(body, ""))
+				return string(r[:int(math.Min(100, float64(len(r))))]) + "…"
+			},
 		}
 
 		// トップページ(index.html)レンダリング
@@ -207,5 +250,11 @@ func main() {
 			}
 
 		}
+	}
+
+	// タグAPI叩いて配列回して生成していく
+	// カテゴリレンダリング
+	for i := 0; i < len(categoriesList.Contents); i++ {
+
 	}
 }

@@ -15,7 +15,7 @@ import (
 )
 
 const configFile = "config.json"
-const VERSION = "0.0.1"
+const VERSION = "0.1"
 
 type ConfigStruct struct {
 	Apikey        string `json:"APIkey"`
@@ -33,6 +33,7 @@ type ContentList struct {
 	Limit      int       `json:"limit"`
 	NextPage   int
 	PrevPage   int
+	AllPage    int
 }
 type Body struct {
 	Fieldid string `json:"fieldId"`
@@ -88,9 +89,51 @@ func main() {
 		}
 
 	} else {
-		// TODO: 環境変数からの読み込みを実装する
 		fmt.Println(configFile + " not found. Loading the setting values from environment variables...")
-		os.Exit(1)
+		Apikey, ok := os.LookupEnv("Apikey")
+		if ok {
+			Config.Apikey = Apikey
+		} else {
+			fmt.Println("Error: Environment variable 'MICROCMS_APIKEY' not found.")
+			os.Exit(1)
+		}
+		Servicedomain, ok := os.LookupEnv("Servicedomain")
+		if ok {
+			Config.Servicedomain = Servicedomain
+		} else {
+			fmt.Println("Error: Environment variable 'Servicedomain' not found.")
+			os.Exit(1)
+		}
+		Exportpath, ok := os.LookupEnv("Exportpath")
+		if ok {
+			Config.Exportpath = Exportpath
+		} else {
+			Config.Exportpath = "./output"
+		}
+		Templatepath, ok := os.LookupEnv("Templatepath")
+		if ok {
+			Config.Templatepath = Templatepath
+		} else {
+			Config.Templatepath = "./template"
+		}
+		AssetsDirName, ok := os.LookupEnv("AssetsDirName")
+		if ok {
+			Config.AssetsDirName = AssetsDirName
+		} else {
+			Config.AssetsDirName = "assets"
+		}
+		PageShowLimit, ok := os.LookupEnv("PageShowLimit")
+		if ok {
+			value, err := strconv.Atoi(PageShowLimit)
+			if err != nil {
+				fmt.Println("Warning: Environment variable 'PageShowLimit' is not integer; Use default value.")
+				Config.PageShowLimit = 10
+			} else {
+				Config.PageShowLimit = value
+			}
+		} else {
+			Config.PageShowLimit = 10
+		}
 	}
 
 	if !fileExists(Config.Templatepath) || !fileExists(Config.Templatepath+"/article.html") || !fileExists(Config.Templatepath+"/index.html") {
@@ -100,16 +143,19 @@ func main() {
 
 	// 出力フォルダ削除
 	if fileExists(Config.Exportpath) {
+		fmt.Println("Removing former export directory...")
 		if err := os.RemoveAll(Config.Exportpath); err != nil {
 			panic(err)
 		}
 	}
 
 	// 出力フォルダ生成
+	fmt.Println("Generating export directory...")
 	os.MkdirAll(Config.Exportpath+"/articles/category/", 0777)
 
 	// アセットのコピー
 	if fileExists(Config.Templatepath + "/" + Config.AssetsDirName) {
+		fmt.Println("Copying assets...")
 		err := copy.Copy(Config.Templatepath+"/"+Config.AssetsDirName, Config.Exportpath+"/"+Config.AssetsDirName)
 		if err != nil {
 			panic(err)
@@ -194,8 +240,10 @@ func main() {
 			r := []rune(htmlTagTrimReg.ReplaceAllString(body, ""))
 			return string(r[:int(math.Min(100, float64(len(r))))]) + "…"
 		},
+		"sub": func(a, b int) int { return a - b },
 	}
 
+	fmt.Println("Rendering...")
 	for i := 0; i < loopsCount; i++ {
 		var articlesPart ContentList
 
@@ -214,6 +262,7 @@ func main() {
 
 		articlesPart.NextPage = i + 2
 		articlesPart.PrevPage = i
+		articlesPart.AllPage = loopsCount
 
 		// トップページ(index.html)レンダリング
 		indexTemplate := template.Must(template.New("index.html").Funcs(functionMapping).ParseFiles(Config.Templatepath + "/index.html"))
@@ -295,6 +344,7 @@ func main() {
 
 			categoryArticlesPart.NextPage = i + 2
 			categoryArticlesPart.PrevPage = i
+			categoryArticlesPart.AllPage = loopsCount
 
 			// カテゴリのトップページ(index.html)レンダリング
 			categoryIndexTemplate := template.Must(template.New("index.html").Funcs(functionMapping).ParseFiles(Config.Templatepath + "/index.html"))
@@ -317,4 +367,6 @@ func main() {
 			}
 		}
 	}
+
+	fmt.Println("Rendering done!")
 }

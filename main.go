@@ -106,7 +106,7 @@ func main() {
 	}
 
 	// 出力フォルダ生成
-	os.MkdirAll(Config.Exportpath+"/articles/category", 0777)
+	os.MkdirAll(Config.Exportpath+"/articles/category/", 0777)
 
 	// アセットのコピー
 	if fileExists(Config.Templatepath + "/" + Config.AssetsDirName) {
@@ -181,6 +181,21 @@ func main() {
 	pageLimit := Config.PageShowLimit
 	loopsCount := int(math.Ceil(float64(contentsCount) / float64(pageLimit)))
 
+	// trim用正規表現
+	htmlTagTrimReg := regexp.MustCompile(`<.*?>`)
+
+	// ヘルパー関数
+	functionMapping := template.FuncMap{
+		"formatTime":   func(t time.Time) string { return t.Format("2006-01-02") },
+		"totalGreater": func(total, limit int) bool { return total > limit },
+		"isNotFirst":   func(offset int) bool { return offset != 0 },
+		"isNotLast":    func(limit, offset, total int) bool { return limit+offset < total },
+		"trimSample": func(body string) string {
+			r := []rune(htmlTagTrimReg.ReplaceAllString(body, ""))
+			return string(r[:int(math.Min(100, float64(len(r))))]) + "…"
+		},
+	}
+
 	for i := 0; i < loopsCount; i++ {
 		var articlesPart ContentList
 
@@ -199,21 +214,6 @@ func main() {
 
 		articlesPart.NextPage = i + 2
 		articlesPart.PrevPage = i
-
-		// trim用正規表現
-		htmlTagTrimReg := regexp.MustCompile(`<.*?>`)
-
-		// ヘルパー関数
-		functionMapping := template.FuncMap{
-			"formatTime":   func(t time.Time) string { return t.Format("2006-01-02") },
-			"totalGreater": func(total, limit int) bool { return total > limit },
-			"isNotFirst":   func(offset int) bool { return offset != 0 },
-			"isNotLast":    func(limit, offset, total int) bool { return limit+offset < total },
-			"trimSample": func(body string) string {
-				r := []rune(htmlTagTrimReg.ReplaceAllString(body, ""))
-				return string(r[:int(math.Min(100, float64(len(r))))]) + "…"
-			},
-		}
 
 		// トップページ(index.html)レンダリング
 		indexTemplate := template.Must(template.New("index.html").Funcs(functionMapping).ParseFiles(Config.Templatepath + "/index.html"))
@@ -255,6 +255,66 @@ func main() {
 	// タグAPI叩いて配列回して生成していく
 	// カテゴリレンダリング
 	for i := 0; i < len(categoriesList.Contents); i++ {
+		var categoryArticlesMinimum ContentList
+		categoryID := categoriesList.Contents[i].ID
 
+		err := client.List(
+			microcms.ListParams{
+				Endpoint: "article",
+				Fields:   []string{"id"},
+				Limit:    10000, // 無料枠リミット
+				Orders:   []string{"-publishedAt"},
+				Filters:  "category[contains]" + categoryID,
+			}, &categoryArticlesMinimum)
+
+		if err != nil {
+			panic(err)
+		}
+
+		contentsCount := categoryArticlesMinimum.Totalcount
+		loopsCount := int(math.Ceil(float64(contentsCount) / float64(pageLimit)))
+
+		categoryOutputBasePath := Config.Exportpath + "/articles/category/" + categoryID
+		os.MkdirAll(categoryOutputBasePath, 0755)
+
+		for i := 0; i < loopsCount; i++ {
+			var categoryArticlesPart ContentList
+
+			err := client.List(
+				microcms.ListParams{
+					Endpoint: "article",
+					Fields:   []string{"id", "title", "body", "publishedAt", "updatedAt", "category.id", "category.name"},
+					Limit:    pageLimit,
+					Offset:   pageLimit * i,
+					Filters:  "category[contains]" + categoryID,
+				}, &categoryArticlesPart)
+
+			if err != nil {
+				panic(err)
+			}
+
+			categoryArticlesPart.NextPage = i + 2
+			categoryArticlesPart.PrevPage = i
+
+			// カテゴリのトップページ(index.html)レンダリング
+			categoryIndexTemplate := template.Must(template.New("index.html").Funcs(functionMapping).ParseFiles(Config.Templatepath + "/index.html"))
+			var categoryOutputFilePath string
+			if i == 0 {
+				categoryOutputFilePath = categoryOutputBasePath + "/index.html"
+			} else {
+				basePath := categoryOutputBasePath + "/page/" + strconv.Itoa(i+1)
+				os.MkdirAll(basePath, 0755)
+				categoryOutputFilePath = basePath + "/index.html"
+			}
+			indexOutputFile, err := os.Create(categoryOutputFilePath)
+			if err != nil {
+				panic(err)
+			}
+			defer indexOutputFile.Close()
+
+			if err := categoryIndexTemplate.Execute(indexOutputFile, categoryArticlesPart); err != nil {
+				panic(err)
+			}
+		}
 	}
 }

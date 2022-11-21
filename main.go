@@ -34,6 +34,7 @@ type ContentList struct {
 	NextPage   int
 	PrevPage   int
 	AllPage    int
+	Root       string
 }
 type Body struct {
 	Fieldid string `json:"fieldId"`
@@ -263,6 +264,7 @@ func main() {
 		articlesPart.NextPage = i + 2
 		articlesPart.PrevPage = i
 		articlesPart.AllPage = loopsCount
+		articlesPart.Root = "/"
 
 		// トップページ(index.html)レンダリング
 		indexTemplate := template.Must(template.New("index.html").Funcs(functionMapping).ParseFiles(Config.Templatepath + "/index.html"))
@@ -345,6 +347,7 @@ func main() {
 			categoryArticlesPart.NextPage = i + 2
 			categoryArticlesPart.PrevPage = i
 			categoryArticlesPart.AllPage = loopsCount
+			categoryArticlesPart.Root = "/articles/category/" + categoryID + "/"
 
 			// カテゴリのトップページ(index.html)レンダリング
 			categoryIndexTemplate := template.Must(template.New("index.html").Funcs(functionMapping).ParseFiles(Config.Templatepath + "/index.html"))

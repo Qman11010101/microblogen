@@ -91,43 +91,43 @@ func main() {
 
 	} else {
 		fmt.Println(configFile + " not found. Loading the setting values from environment variables...")
-		Apikey, ok := os.LookupEnv("Apikey")
+		Apikey, ok := os.LookupEnv("MICROCMS_API_KEY")
 		if ok {
 			Config.Apikey = Apikey
 		} else {
-			fmt.Println("Error: Environment variable 'MICROCMS_APIKEY' not found.")
+			fmt.Println("Error: Environment variable 'MICROCMS_API_KEY' not found.")
 			os.Exit(1)
 		}
-		Servicedomain, ok := os.LookupEnv("Servicedomain")
+		Servicedomain, ok := os.LookupEnv("SERVICE_DOMAIN")
 		if ok {
 			Config.Servicedomain = Servicedomain
 		} else {
 			fmt.Println("Error: Environment variable 'Servicedomain' not found.")
 			os.Exit(1)
 		}
-		Exportpath, ok := os.LookupEnv("Exportpath")
+		Exportpath, ok := os.LookupEnv("EXPORT_PATH")
 		if ok {
 			Config.Exportpath = Exportpath
 		} else {
 			Config.Exportpath = "./output"
 		}
-		Templatepath, ok := os.LookupEnv("Templatepath")
+		Templatepath, ok := os.LookupEnv("TEMPLATE_PATH")
 		if ok {
 			Config.Templatepath = Templatepath
 		} else {
 			Config.Templatepath = "./template"
 		}
-		AssetsDirName, ok := os.LookupEnv("AssetsDirName")
+		AssetsDirName, ok := os.LookupEnv("ASSETS_DIR_NAME")
 		if ok {
 			Config.AssetsDirName = AssetsDirName
 		} else {
 			Config.AssetsDirName = "assets"
 		}
-		PageShowLimit, ok := os.LookupEnv("PageShowLimit")
+		PageShowLimit, ok := os.LookupEnv("PAGE_SHOW_LIMIT")
 		if ok {
 			value, err := strconv.Atoi(PageShowLimit)
 			if err != nil {
-				fmt.Println("Warning: Environment variable 'PageShowLimit' is not integer; Use default value.")
+				fmt.Println("Warning: Environment variable 'PAGE_SHOW_LIMIT' is not integer; Use default value.")
 				Config.PageShowLimit = 10
 			} else {
 				Config.PageShowLimit = value
@@ -299,7 +299,6 @@ func main() {
 			if err := articleTemplate.Execute(articleOutputFile, articlesPart.Contents[a]); err != nil {
 				panic(err)
 			}
-
 		}
 	}
 

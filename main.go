@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"math"
 	"os"
 	"regexp"
@@ -161,6 +162,21 @@ func main() {
 		if err != nil {
 			panic(err)
 		}
+	}
+
+	// faviconのコピー
+	if fileExists(Config.Templatepath + "/favicon.ico") {
+		dest, err := os.Create(Config.Exportpath + "/favicon.ico")
+		if err != nil {
+			panic(err)
+		}
+		defer dest.Close()
+		source, err := os.Open(Config.Templatepath + "/favicon.ico")
+		if err != nil {
+			panic(err)
+		}
+		defer source.Close()
+		io.Copy(dest, source)
 	}
 
 	latestArticlesJsonPath := Config.Exportpath + "/latest.json"

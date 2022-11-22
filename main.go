@@ -42,9 +42,8 @@ type Body struct {
 	Body    string `json:"body"`
 }
 type Category struct {
-	ID       string `json:"id"`
-	Name     string `json:"name"`
-	Articles []Content
+	ID   string `json:"id"`
+	Name string `json:"name"`
 }
 type Content struct {
 	ID          string     `json:"id,omitempty"`
@@ -54,7 +53,6 @@ type Content struct {
 	UpdatedAt   time.Time  `json:"updatedAt,omitempty"`
 	Category    []Category `json:"category,omitempty"`
 }
-
 type ContentCategoryList struct {
 	Contents   []Category `json:"contents,omitempty"`
 	Totalcount int        `json:"totalCount,omitempty"`
@@ -103,7 +101,7 @@ func main() {
 		if ok {
 			Config.Servicedomain = Servicedomain
 		} else {
-			fmt.Println("Error: Environment variable 'Servicedomain' not found.")
+			fmt.Println("Error: Environment variable 'SERVICE_DOMAIN' not found.")
 			os.Exit(1)
 		}
 		Exportpath, ok := os.LookupEnv("EXPORT_PATH")
@@ -260,8 +258,9 @@ func main() {
 		"sub": func(a, b int) int { return a - b },
 	}
 
-	fmt.Println("Rendering...")
+	fmt.Println("Rendering start")
 	for i := 0; i < loopsCount; i++ {
+		fmt.Println("Rendering index.html ") // なぜ表示されない？
 		var articlesPart ContentList
 
 		err := client.List(

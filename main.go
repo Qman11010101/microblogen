@@ -2,8 +2,8 @@ package main
 
 import (
 	"encoding/json"
-	"fmt"
 	"io"
+	"log"
 	"math"
 	"os"
 	"regexp"
@@ -16,7 +16,7 @@ import (
 )
 
 const configFile = "config.json"
-const VERSION = "0.1"
+const VERSION = "0.1.1"
 
 type ConfigStruct struct {
 	Apikey        string `json:"APIkey"`
@@ -27,8 +27,8 @@ type ConfigStruct struct {
 	PageShowLimit int    `json:"pageShowLimit"`
 }
 
-type ContentList struct {
-	Contents   []Content `json:"contents"`
+type ArticleList struct {
+	Articles   []Article `json:"contents"`
 	Totalcount int       `json:"totalCount"`
 	Offset     int       `json:"offset"`
 	Limit      int       `json:"limit"`
@@ -42,10 +42,11 @@ type Body struct {
 	Body    string `json:"body"`
 }
 type Category struct {
-	ID   string `json:"id"`
-	Name string `json:"name"`
+	ID    string `json:"id"`
+	Name  string `json:"name"`
+	Count int
 }
-type Content struct {
+type Article struct {
 	ID          string     `json:"id,omitempty"`
 	Title       string     `json:"title,omitempty"`
 	Body        []Body     `json:"body,omitempty"`
@@ -53,8 +54,8 @@ type Content struct {
 	UpdatedAt   time.Time  `json:"updatedAt,omitempty"`
 	Category    []Category `json:"category,omitempty"`
 }
-type ContentCategoryList struct {
-	Contents   []Category `json:"contents,omitempty"`
+type CategoryList struct {
+	Categories []Category `json:"contents,omitempty"`
 	Totalcount int        `json:"totalCount,omitempty"`
 	Offset     int        `json:"offset,omitempty"`
 	Limit      int        `json:"limit,omitempty"`
@@ -72,37 +73,38 @@ func fileExists(name string) bool {
 // main section
 
 func main() {
-	fmt.Println("microblogen v" + VERSION)
+	log.SetFlags(log.Ltime)
+	log.Print("microblogen v" + VERSION)
 
 	// ID引数に取って差分レンダリングできそう？
 	// arguments := os.Args[1:]
 
+	// ------------------------
+	// 設定ファイル/環境変数読み込み
+	// ------------------------
 	if fileExists(configFile) {
 		configFileBytes, err := os.ReadFile(configFile)
 		if err != nil {
-			panic(err)
+			log.Panic(err)
 		}
 
 		err = json.Unmarshal([]byte(configFileBytes), &Config)
 		if err != nil {
-			panic(err)
+			log.Panic(err)
 		}
-
 	} else {
-		fmt.Println(configFile + " not found. Loading the setting values from environment variables...")
+		log.Print(configFile, "not found. Loading the setting values from environment variables instead")
 		Apikey, ok := os.LookupEnv("MICROCMS_API_KEY")
 		if ok {
 			Config.Apikey = Apikey
 		} else {
-			fmt.Println("Error: Environment variable 'MICROCMS_API_KEY' not found.")
-			os.Exit(1)
+			log.Fatal("Error: Environment variable 'MICROCMS_API_KEY' not found.")
 		}
 		Servicedomain, ok := os.LookupEnv("SERVICE_DOMAIN")
 		if ok {
 			Config.Servicedomain = Servicedomain
 		} else {
-			fmt.Println("Error: Environment variable 'SERVICE_DOMAIN' not found.")
-			os.Exit(1)
+			log.Fatal("Error: Environment variable 'SERVICE_DOMAIN' not found.")
 		}
 		Exportpath, ok := os.LookupEnv("EXPORT_PATH")
 		if ok {
@@ -126,7 +128,7 @@ func main() {
 		if ok {
 			value, err := strconv.Atoi(PageShowLimit)
 			if err != nil {
-				fmt.Println("Warning: Environment variable 'PAGE_SHOW_LIMIT' is not integer; Use default value.")
+				log.Print("Warning: Environment variable 'PAGE_SHOW_LIMIT' is not integer; Use default value.")
 				Config.PageShowLimit = 10
 			} else {
 				Config.PageShowLimit = value
@@ -136,54 +138,57 @@ func main() {
 		}
 	}
 
+	// -----------------
+	// テンプレート存在確認
+	// -----------------
 	if !fileExists(Config.Templatepath) || !fileExists(Config.Templatepath+"/article.html") || !fileExists(Config.Templatepath+"/index.html") {
-		fmt.Println("Error: Missing templates. You must prepare \"article.html\" and \"index.html\" inside ./" + Config.Templatepath + ".")
-		os.Exit(1)
+		log.Fatal("Error: Missing templates. You must prepare \"article.html\" and \"index.html\" inside ./" + Config.Templatepath + ".")
 	}
 
-	// 出力フォルダ削除
+	// ---------------
+	// 出力フォルダ再生成
+	// ---------------
 	if fileExists(Config.Exportpath) {
-		fmt.Println("Removing former export directory...")
+		log.Print(">> Removing existing export directory")
 		if err := os.RemoveAll(Config.Exportpath); err != nil {
-			panic(err)
+			log.Panic(err)
 		}
 	}
 
-	// 出力フォルダ生成
-	fmt.Println("Generating export directory...")
+	log.Print(">> Generating export directory")
 	os.MkdirAll(Config.Exportpath+"/articles/category/", 0777)
 
-	// アセットのコピー
+	// ------------
+	// アセットコピー
+	// ------------
 	if fileExists(Config.Templatepath + "/" + Config.AssetsDirName) {
-		fmt.Println("Copying assets...")
+		log.Print(">> Copying assets")
 		err := copy.Copy(Config.Templatepath+"/"+Config.AssetsDirName, Config.Exportpath+"/"+Config.AssetsDirName)
 		if err != nil {
-			panic(err)
+			log.Panic(err)
 		}
 	}
 
-	// faviconのコピー
+	// favicon.icoのコピー(TODO: copyfiles.json参照させる)
 	if fileExists(Config.Templatepath + "/favicon.ico") {
 		dest, err := os.Create(Config.Exportpath + "/favicon.ico")
 		if err != nil {
-			panic(err)
+			log.Panic(err)
 		}
 		defer dest.Close()
 		source, err := os.Open(Config.Templatepath + "/favicon.ico")
 		if err != nil {
-			panic(err)
+			log.Panic(err)
 		}
 		defer source.Close()
 		io.Copy(dest, source)
 	}
 
-	latestArticlesJsonPath := Config.Exportpath + "/latest.json"
-	categoriesJsonPath := Config.Exportpath + "/category.json"
-
+	// microcms用クライアントインスタンス生成
 	client := microcms.New(Config.Servicedomain, Config.Apikey)
 
 	// 先にミニマムなlatest用のやつ落としてcontent数(totalCount)を取得できるようにしておく
-	var articlesLatest ContentList
+	var articlesLatest ArticleList
 
 	err := client.List(
 		microcms.ListParams{
@@ -194,55 +199,31 @@ func main() {
 		}, &articlesLatest)
 
 	if err != nil {
-		panic(err)
+		log.Panic(err)
 	}
 
 	// 最新記事のJSONを保存
-	articlesFile, err := os.Create(latestArticlesJsonPath)
+	articlesFile, err := os.Create(Config.Exportpath + "/latest.json")
 	if err != nil {
-		panic(err)
+		log.Panic(err)
 	}
 	defer articlesFile.Close()
 
-	s, err := json.Marshal(articlesLatest.Contents)
+	s, err := json.Marshal(articlesLatest.Articles)
 	if err != nil {
-		panic(err)
+		log.Panic(err)
 	}
 	articlesFile.WriteString(string(s))
-
-	// カテゴリ(タグ)の構造体
-	var categoriesList ContentCategoryList
-
-	err = client.List(
-		microcms.ListParams{
-			Endpoint: "category",
-			Fields:   []string{"id", "name"},
-			Limit:    10000, // 無料枠リミット
-		},
-		&categoriesList,
-	)
-	if err != nil {
-		panic(err)
-	}
-
-	// カテゴリ(タグ)のJSONを保存
-	categoriesFile, err := os.Create(categoriesJsonPath)
-	if err != nil {
-		panic(err)
-	}
-	defer categoriesFile.Close()
-
-	x, err := json.Marshal(categoriesList.Contents)
-	if err != nil {
-		panic(err)
-	}
-	categoriesFile.WriteString(string(x))
 
 	contentsCount := articlesLatest.Totalcount
 	pageLimit := Config.PageShowLimit
 	loopsCount := int(math.Ceil(float64(contentsCount) / float64(pageLimit)))
 
-	// trim用正規表現
+	// -----------------------------------
+	// メインページ(index.html)/記事ページ生成
+	// -----------------------------------
+
+	// HTMLタグ消去用正規表現
 	htmlTagTrimReg := regexp.MustCompile(`<.*?>`)
 
 	// ヘルパー関数
@@ -258,10 +239,10 @@ func main() {
 		"sub": func(a, b int) int { return a - b },
 	}
 
-	fmt.Println("Rendering start")
+	log.Print(">> Rendering start ")
 	for i := 0; i < loopsCount; i++ {
-		fmt.Println("Rendering index.html ") // なぜ表示されない？
-		var articlesPart ContentList
+		log.Print("Rendering mainpage ", i+1, " / ", loopsCount)
+		var articlesPart ArticleList
 
 		err := client.List(
 			microcms.ListParams{
@@ -273,7 +254,7 @@ func main() {
 			}, &articlesPart)
 
 		if err != nil {
-			panic(err)
+			log.Panic(err)
 		}
 
 		articlesPart.NextPage = i + 2
@@ -293,35 +274,69 @@ func main() {
 		}
 		indexOutputFile, err := os.Create(outputFilePath)
 		if err != nil {
-			panic(err)
+			log.Panic(err)
 		}
 		defer indexOutputFile.Close()
 
 		if err := indexTemplate.Execute(indexOutputFile, articlesPart); err != nil {
-			panic(err)
+			log.Panic(err)
 		}
 
-		// 記事(article.html)レンダリング
-		for a := 0; a < len(articlesPart.Contents); a++ {
+		// 記事レンダリング
+		for a := 0; a < len(articlesPart.Articles); a++ {
+			log.Print("- Rendering articles ", pageLimit*i+a+1, " / ", articlesPart.Totalcount)
 			articleTemplate := template.Must(template.New("article.html").Funcs(functionMapping).ParseFiles(Config.Templatepath + "/article.html"))
-			outputFilePath := Config.Exportpath + "/articles/" + articlesPart.Contents[a].ID + ".html"
+			outputFilePath := Config.Exportpath + "/articles/" + articlesPart.Articles[a].ID + ".html"
 			articleOutputFile, err := os.Create(outputFilePath)
 			if err != nil {
-				panic(err)
+				log.Panic(err)
 			}
 			defer articleOutputFile.Close()
 
-			if err := articleTemplate.Execute(articleOutputFile, articlesPart.Contents[a]); err != nil {
-				panic(err)
+			if err := articleTemplate.Execute(articleOutputFile, articlesPart.Articles[a]); err != nil {
+				log.Panic(err)
 			}
 		}
 	}
 
-	// タグAPI叩いて配列回して生成していく
+	// ---------------
+	// カテゴリページ生成
+	// ---------------
+
+	// カテゴリ(タグ)の構造体
+	var categoriesList CategoryList
+
+	err = client.List(
+		microcms.ListParams{
+			Endpoint: "category",
+			Fields:   []string{"id", "name"},
+			Limit:    10000, // 無料枠リミット
+		},
+		&categoriesList,
+	)
+	if err != nil {
+		log.Panic(err)
+	}
+
+	// カテゴリのJSONを保存
+	categoriesFile, err := os.Create(Config.Exportpath + "/category.json")
+	if err != nil {
+		log.Panic(err)
+	}
+	defer categoriesFile.Close()
+
+	x, err := json.Marshal(categoriesList.Categories)
+	if err != nil {
+		log.Panic(err)
+	}
+	categoriesFile.WriteString(string(x))
+
 	// カテゴリレンダリング
-	for i := 0; i < len(categoriesList.Contents); i++ {
-		var categoryArticlesMinimum ContentList
-		categoryID := categoriesList.Contents[i].ID
+	categories := categoriesList.Categories
+	for c := 0; c < len(categories); c++ {
+		var categoryArticlesMinimum ArticleList
+		categoryID := categories[c].ID
+		log.Print("Rendering category ", c+1, " / ", len(categories), " '"+categoryID+"'")
 
 		err := client.List(
 			microcms.ListParams{
@@ -333,7 +348,7 @@ func main() {
 			}, &categoryArticlesMinimum)
 
 		if err != nil {
-			panic(err)
+			log.Panic(err)
 		}
 
 		contentsCount := categoryArticlesMinimum.Totalcount
@@ -343,7 +358,7 @@ func main() {
 		os.MkdirAll(categoryOutputBasePath, 0755)
 
 		for i := 0; i < loopsCount; i++ {
-			var categoryArticlesPart ContentList
+			var categoryArticlesPart ArticleList
 
 			err := client.List(
 				microcms.ListParams{
@@ -355,7 +370,7 @@ func main() {
 				}, &categoryArticlesPart)
 
 			if err != nil {
-				panic(err)
+				log.Panic(err)
 			}
 
 			categoryArticlesPart.NextPage = i + 2
@@ -375,15 +390,15 @@ func main() {
 			}
 			indexOutputFile, err := os.Create(categoryOutputFilePath)
 			if err != nil {
-				panic(err)
+				log.Panic(err)
 			}
 			defer indexOutputFile.Close()
 
 			if err := categoryIndexTemplate.Execute(indexOutputFile, categoryArticlesPart); err != nil {
-				panic(err)
+				log.Panic(err)
 			}
 		}
 	}
 
-	fmt.Println("Rendering done!")
+	log.Print("Rendering done!")
 }

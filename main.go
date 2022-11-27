@@ -97,7 +97,7 @@ func main() {
 			log.Panic(err)
 		}
 	} else {
-		log.Print(configFile, "not found. Loading the setting values from environment variables instead")
+		log.Print(configFile, " not found. Loading the setting values from environment variables instead")
 		Apikey, ok := os.LookupEnv("MICROCMS_API_KEY")
 		if ok {
 			Config.Apikey = Apikey

@@ -2,7 +2,6 @@ package main
 
 import (
 	"encoding/json"
-	"io"
 	"log"
 	"math"
 	"os"
@@ -16,6 +15,7 @@ import (
 )
 
 const configFile = "config.json"
+const copyAssetsFile = "copyassets.json"
 const VERSION = "0.1.1"
 
 type ConfigStruct struct {
@@ -25,6 +25,9 @@ type ConfigStruct struct {
 	Templatepath  string `json:"templatePath"`
 	AssetsDirName string `json:"assetsDirName"`
 	PageShowLimit int    `json:"pageShowLimit"`
+}
+type CopyingAssets struct {
+	Assets []string `json:"assets"`
 }
 
 type ArticleList struct {
@@ -62,6 +65,7 @@ type CategoryList struct {
 }
 
 var Config ConfigStruct
+var CopyAssets CopyingAssets
 
 // Utility Function
 
@@ -118,12 +122,12 @@ func main() {
 		} else {
 			Config.Templatepath = "./template"
 		}
-		AssetsDirName, ok := os.LookupEnv("ASSETS_DIR_NAME")
-		if ok {
-			Config.AssetsDirName = AssetsDirName
-		} else {
-			Config.AssetsDirName = "assets"
-		}
+		// AssetsDirName, ok := os.LookupEnv("ASSETS_DIR_NAME")
+		// if ok {
+		// 	Config.AssetsDirName = AssetsDirName
+		// } else {
+		// 	Config.AssetsDirName = "assets"
+		// }
 		PageShowLimit, ok := os.LookupEnv("PAGE_SHOW_LIMIT")
 		if ok {
 			value, err := strconv.Atoi(PageShowLimit)
@@ -161,27 +165,30 @@ func main() {
 	// ------------
 	// アセットコピー
 	// ------------
-	if fileExists(Config.Templatepath + "/" + Config.AssetsDirName) {
-		log.Print(">> Copying assets")
-		err := copy.Copy(Config.Templatepath+"/"+Config.AssetsDirName, Config.Exportpath+"/"+Config.AssetsDirName)
+	if fileExists(copyAssetsFile) {
+		copyAssetsFileBytes, err := os.ReadFile(copyAssetsFile)
 		if err != nil {
 			log.Panic(err)
 		}
-	}
 
-	// favicon.icoのコピー(TODO: copyfiles.json参照させる)
-	if fileExists(Config.Templatepath + "/favicon.ico") {
-		dest, err := os.Create(Config.Exportpath + "/favicon.ico")
+		err = json.Unmarshal([]byte(copyAssetsFileBytes), &CopyAssets)
 		if err != nil {
 			log.Panic(err)
 		}
-		defer dest.Close()
-		source, err := os.Open(Config.Templatepath + "/favicon.ico")
-		if err != nil {
-			log.Panic(err)
+
+		log.Print(">> Copying assets")
+
+		for i := 0; i < len(CopyAssets.Assets); i++ {
+			assetObjName := CopyAssets.Assets[i]
+			if fileExists(Config.Templatepath + "/" + assetObjName) {
+				log.Print(">>>> Copying " + assetObjName)
+				copy.Copy(Config.Templatepath+"/"+assetObjName, Config.Exportpath+"/"+assetObjName)
+			} else {
+				log.Print("Warning: " + assetObjName + " does not exist; Skipped!")
+			}
 		}
-		defer source.Close()
-		io.Copy(dest, source)
+	} else {
+		log.Print("Warning: " + copyAssetsFile + "not found; No assets will be copied. Please prepare '" + copyAssetsFile + "' if you want to copy assets.")
 	}
 
 	// microcms用クライアントインスタンス生成

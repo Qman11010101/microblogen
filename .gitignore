@@ -19,5 +19,6 @@ go.work
 
 # my add
 config.json
+copyassets.json
 output/
 template/

@@ -16,7 +16,7 @@ import (
 
 const configFile = "config.json"
 const copyAssetsFile = "copyassets.json"
-const VERSION = "0.1.1"
+const VERSION = "0.2"
 
 type ConfigStruct struct {
 	Apikey        string `json:"APIkey"`
@@ -122,12 +122,6 @@ func main() {
 		} else {
 			Config.Templatepath = "./template"
 		}
-		// AssetsDirName, ok := os.LookupEnv("ASSETS_DIR_NAME")
-		// if ok {
-		// 	Config.AssetsDirName = AssetsDirName
-		// } else {
-		// 	Config.AssetsDirName = "assets"
-		// }
 		PageShowLimit, ok := os.LookupEnv("PAGE_SHOW_LIMIT")
 		if ok {
 			value, err := strconv.Atoi(PageShowLimit)

@@ -16,7 +16,7 @@ import (
 
 const configFile = "config.json"
 const copyAssetsFile = "copyassets.json"
-const VERSION = "0.2.2"
+const VERSION = "1.0.0"
 
 type ConfigStruct struct {
 	Apikey        string `json:"APIkey"`

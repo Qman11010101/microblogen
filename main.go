@@ -7,6 +7,7 @@ import (
 	"os"
 	"regexp"
 	"strconv"
+	"sync"
 	"text/template"
 	"time"
 
@@ -79,6 +80,8 @@ func fileExists(name string) bool {
 func main() {
 	log.SetFlags(log.Ltime)
 	log.Print("microblogen v" + VERSION)
+
+	var wg sync.WaitGroup
 
 	// ID引数に取って差分レンダリングできそう？
 	// arguments := os.Args[1:]
@@ -159,7 +162,9 @@ func main() {
 	// ------------
 	// アセットコピー
 	// ------------
-	go func() {
+	wg.Add(1)
+	go func(wg *sync.WaitGroup) {
+		defer wg.Done()
 		if fileExists(copyAssetsFile) {
 			copyAssetsFileBytes, err := os.ReadFile(copyAssetsFile)
 			if err != nil {
@@ -185,7 +190,7 @@ func main() {
 		} else {
 			log.Print("Warning: " + copyAssetsFile + "not found; No assets will be copied. Please prepare '" + copyAssetsFile + "' if you want to copy assets.")
 		}
-	}()
+	}(&wg)
 
 	// microcms用クライアントインスタンス生成
 	client := microcms.New(Config.Servicedomain, Config.Apikey)
@@ -266,7 +271,9 @@ func main() {
 		articlesPart.Root = "/"
 
 		// トップページ(index.html)レンダリング
-		go func() {
+		wg.Add(1)
+		go func(wg *sync.WaitGroup) {
+			defer wg.Done()
 			indexTemplate := template.Must(template.New("index.html").Funcs(functionMapping).ParseFiles(Config.Templatepath + "/index.html"))
 			var outputFilePath string
 			if i == 0 {
@@ -285,13 +292,15 @@ func main() {
 			if err := indexTemplate.Execute(indexOutputFile, articlesPart); err != nil {
 				log.Panic(err)
 			}
-		}()
+		}(&wg)
 
 		// 記事レンダリング
 		for a := 0; a < len(articlesPart.Articles); a++ {
 			loopval := a
 			loopvalOuter := i
-			go func() {
+			wg.Add(1)
+			go func(wg *sync.WaitGroup) {
+				defer wg.Done()
 				log.Print("- Rendering articles ", pageLimit*loopvalOuter+loopval+1, " / ", articlesPart.Totalcount)
 				articleTemplate := template.Must(template.New("article.html").Funcs(functionMapping).ParseFiles(Config.Templatepath + "/article.html"))
 				outputFilePath := Config.Exportpath + "/articles/" + articlesPart.Articles[loopval].ID + ".html"
@@ -304,7 +313,7 @@ func main() {
 				if err := articleTemplate.Execute(articleOutputFile, articlesPart.Articles[loopval]); err != nil {
 					log.Panic(err)
 				}
-			}()
+			}(&wg)
 		}
 	}
 
@@ -368,7 +377,9 @@ func main() {
 
 		for i := 0; i < loopsCount; i++ {
 			loopval := i
-			go func() {
+			wg.Add(1)
+			go func(wg *sync.WaitGroup) {
+				defer wg.Done()
 				var categoryArticlesPart ArticleList
 
 				err := client.List(
@@ -408,9 +419,10 @@ func main() {
 				if err := categoryIndexTemplate.Execute(indexOutputFile, categoryArticlesPart); err != nil {
 					log.Panic(err)
 				}
-			}()
+			}(&wg)
 		}
 	}
 
+	wg.Wait()
 	log.Print("Rendering done!")
 }

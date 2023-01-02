@@ -159,31 +159,33 @@ func main() {
 	// ------------
 	// アセットコピー
 	// ------------
-	if fileExists(copyAssetsFile) {
-		copyAssetsFileBytes, err := os.ReadFile(copyAssetsFile)
-		if err != nil {
-			log.Panic(err)
-		}
-
-		err = json.Unmarshal([]byte(copyAssetsFileBytes), &CopyAssets)
-		if err != nil {
-			log.Panic(err)
-		}
-
-		log.Print(">> Copying assets")
-
-		for i := 0; i < len(CopyAssets.Assets); i++ {
-			assetObjName := CopyAssets.Assets[i]
-			if fileExists(Config.Templatepath + "/" + assetObjName) {
-				log.Print(">>>> Copying " + assetObjName)
-				copy.Copy(Config.Templatepath+"/"+assetObjName, Config.Exportpath+"/"+assetObjName)
-			} else {
-				log.Print("Warning: " + assetObjName + " does not exist; Skipped!")
+	go func() {
+		if fileExists(copyAssetsFile) {
+			copyAssetsFileBytes, err := os.ReadFile(copyAssetsFile)
+			if err != nil {
+				log.Panic(err)
 			}
+
+			err = json.Unmarshal([]byte(copyAssetsFileBytes), &CopyAssets)
+			if err != nil {
+				log.Panic(err)
+			}
+
+			log.Print(">> Copying assets")
+
+			for i := 0; i < len(CopyAssets.Assets); i++ {
+				assetObjName := CopyAssets.Assets[i]
+				if fileExists(Config.Templatepath + "/" + assetObjName) {
+					log.Print(">>>> Copying " + assetObjName)
+					copy.Copy(Config.Templatepath+"/"+assetObjName, Config.Exportpath+"/"+assetObjName)
+				} else {
+					log.Print("Warning: " + assetObjName + " does not exist; Skipped!")
+				}
+			}
+		} else {
+			log.Print("Warning: " + copyAssetsFile + "not found; No assets will be copied. Please prepare '" + copyAssetsFile + "' if you want to copy assets.")
 		}
-	} else {
-		log.Print("Warning: " + copyAssetsFile + "not found; No assets will be copied. Please prepare '" + copyAssetsFile + "' if you want to copy assets.")
-	}
+	}()
 
 	// microcms用クライアントインスタンス生成
 	client := microcms.New(Config.Servicedomain, Config.Apikey)
@@ -264,39 +266,45 @@ func main() {
 		articlesPart.Root = "/"
 
 		// トップページ(index.html)レンダリング
-		indexTemplate := template.Must(template.New("index.html").Funcs(functionMapping).ParseFiles(Config.Templatepath + "/index.html"))
-		var outputFilePath string
-		if i == 0 {
-			outputFilePath = Config.Exportpath + "/index.html"
-		} else {
-			outputBasePath := Config.Exportpath + "/page/" + strconv.Itoa(i+1)
-			os.MkdirAll(outputBasePath, 0755)
-			outputFilePath = outputBasePath + "/index.html"
-		}
-		indexOutputFile, err := os.Create(outputFilePath)
-		if err != nil {
-			log.Panic(err)
-		}
-		defer indexOutputFile.Close()
-
-		if err := indexTemplate.Execute(indexOutputFile, articlesPart); err != nil {
-			log.Panic(err)
-		}
-
-		// 記事レンダリング
-		for a := 0; a < len(articlesPart.Articles); a++ {
-			log.Print("- Rendering articles ", pageLimit*i+a+1, " / ", articlesPart.Totalcount)
-			articleTemplate := template.Must(template.New("article.html").Funcs(functionMapping).ParseFiles(Config.Templatepath + "/article.html"))
-			outputFilePath := Config.Exportpath + "/articles/" + articlesPart.Articles[a].ID + ".html"
-			articleOutputFile, err := os.Create(outputFilePath)
+		go func() {
+			indexTemplate := template.Must(template.New("index.html").Funcs(functionMapping).ParseFiles(Config.Templatepath + "/index.html"))
+			var outputFilePath string
+			if i == 0 {
+				outputFilePath = Config.Exportpath + "/index.html"
+			} else {
+				outputBasePath := Config.Exportpath + "/page/" + strconv.Itoa(i+1)
+				os.MkdirAll(outputBasePath, 0755)
+				outputFilePath = outputBasePath + "/index.html"
+			}
+			indexOutputFile, err := os.Create(outputFilePath)
 			if err != nil {
 				log.Panic(err)
 			}
-			defer articleOutputFile.Close()
+			defer indexOutputFile.Close()
 
-			if err := articleTemplate.Execute(articleOutputFile, articlesPart.Articles[a]); err != nil {
+			if err := indexTemplate.Execute(indexOutputFile, articlesPart); err != nil {
 				log.Panic(err)
 			}
+		}()
+
+		// 記事レンダリング
+		for a := 0; a < len(articlesPart.Articles); a++ {
+			loopval := a
+			loopvalOuter := i
+			go func() {
+				log.Print("- Rendering articles ", pageLimit*loopvalOuter+loopval+1, " / ", articlesPart.Totalcount)
+				articleTemplate := template.Must(template.New("article.html").Funcs(functionMapping).ParseFiles(Config.Templatepath + "/article.html"))
+				outputFilePath := Config.Exportpath + "/articles/" + articlesPart.Articles[loopval].ID + ".html"
+				articleOutputFile, err := os.Create(outputFilePath)
+				if err != nil {
+					log.Panic(err)
+				}
+				defer articleOutputFile.Close()
+
+				if err := articleTemplate.Execute(articleOutputFile, articlesPart.Articles[loopval]); err != nil {
+					log.Panic(err)
+				}
+			}()
 		}
 	}
 
@@ -359,45 +367,48 @@ func main() {
 		os.MkdirAll(categoryOutputBasePath, 0755)
 
 		for i := 0; i < loopsCount; i++ {
-			var categoryArticlesPart ArticleList
+			loopval := i
+			go func() {
+				var categoryArticlesPart ArticleList
 
-			err := client.List(
-				microcms.ListParams{
-					Endpoint: "article",
-					Fields:   []string{"id", "title", "body", "publishedAt", "updatedAt", "category.id", "category.name"},
-					Limit:    pageLimit,
-					Offset:   pageLimit * i,
-					Filters:  "category[contains]" + categoryID,
-				}, &categoryArticlesPart)
+				err := client.List(
+					microcms.ListParams{
+						Endpoint: "article",
+						Fields:   []string{"id", "title", "body", "publishedAt", "updatedAt", "category.id", "category.name"},
+						Limit:    pageLimit,
+						Offset:   pageLimit * loopval,
+						Filters:  "category[contains]" + categoryID,
+					}, &categoryArticlesPart)
 
-			if err != nil {
-				log.Panic(err)
-			}
+				if err != nil {
+					log.Panic(err)
+				}
 
-			categoryArticlesPart.NextPage = i + 2
-			categoryArticlesPart.PrevPage = i
-			categoryArticlesPart.AllPage = loopsCount
-			categoryArticlesPart.Root = "/articles/category/" + categoryID + "/"
+				categoryArticlesPart.NextPage = loopval + 2
+				categoryArticlesPart.PrevPage = loopval
+				categoryArticlesPart.AllPage = loopsCount
+				categoryArticlesPart.Root = "/articles/category/" + categoryID + "/"
 
-			// カテゴリのトップページ(index.html)レンダリング
-			categoryIndexTemplate := template.Must(template.New("index.html").Funcs(functionMapping).ParseFiles(Config.Templatepath + "/index.html"))
-			var categoryOutputFilePath string
-			if i == 0 {
-				categoryOutputFilePath = categoryOutputBasePath + "/index.html"
-			} else {
-				basePath := categoryOutputBasePath + "/page/" + strconv.Itoa(i+1)
-				os.MkdirAll(basePath, 0755)
-				categoryOutputFilePath = basePath + "/index.html"
-			}
-			indexOutputFile, err := os.Create(categoryOutputFilePath)
-			if err != nil {
-				log.Panic(err)
-			}
-			defer indexOutputFile.Close()
+				// カテゴリのトップページ(index.html)レンダリング
+				categoryIndexTemplate := template.Must(template.New("index.html").Funcs(functionMapping).ParseFiles(Config.Templatepath + "/index.html"))
+				var categoryOutputFilePath string
+				if loopval == 0 {
+					categoryOutputFilePath = categoryOutputBasePath + "/index.html"
+				} else {
+					basePath := categoryOutputBasePath + "/page/" + strconv.Itoa(loopval+1)
+					os.MkdirAll(basePath, 0755)
+					categoryOutputFilePath = basePath + "/index.html"
+				}
+				indexOutputFile, err := os.Create(categoryOutputFilePath)
+				if err != nil {
+					log.Panic(err)
+				}
+				defer indexOutputFile.Close()
 
-			if err := categoryIndexTemplate.Execute(indexOutputFile, categoryArticlesPart); err != nil {
-				log.Panic(err)
-			}
+				if err := categoryIndexTemplate.Execute(indexOutputFile, categoryArticlesPart); err != nil {
+					log.Panic(err)
+				}
+			}()
 		}
 	}
 

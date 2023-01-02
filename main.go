@@ -7,6 +7,7 @@ import (
 	"os"
 	"regexp"
 	"strconv"
+	"sync"
 	"text/template"
 	"time"
 
@@ -79,6 +80,8 @@ func fileExists(name string) bool {
 func main() {
 	log.SetFlags(log.Ltime)
 	log.Print("microblogen v" + VERSION)
+
+	var wg sync.WaitGroup
 
 	// ID引数に取って差分レンダリングできそう？
 	// arguments := os.Args[1:]
@@ -159,7 +162,9 @@ func main() {
 	// ------------
 	// アセットコピー
 	// ------------
+	wg.Add(1)
 	go func() {
+		defer wg.Done()
 		if fileExists(copyAssetsFile) {
 			copyAssetsFileBytes, err := os.ReadFile(copyAssetsFile)
 			if err != nil {
@@ -266,7 +271,9 @@ func main() {
 		articlesPart.Root = "/"
 
 		// トップページ(index.html)レンダリング
+		wg.Add(1)
 		go func() {
+			defer wg.Done()
 			indexTemplate := template.Must(template.New("index.html").Funcs(functionMapping).ParseFiles(Config.Templatepath + "/index.html"))
 			var outputFilePath string
 			if i == 0 {
@@ -291,7 +298,9 @@ func main() {
 		for a := 0; a < len(articlesPart.Articles); a++ {
 			loopval := a
 			loopvalOuter := i
+			wg.Add(1)
 			go func() {
+				defer wg.Done()
 				log.Print("- Rendering articles ", pageLimit*loopvalOuter+loopval+1, " / ", articlesPart.Totalcount)
 				articleTemplate := template.Must(template.New("article.html").Funcs(functionMapping).ParseFiles(Config.Templatepath + "/article.html"))
 				outputFilePath := Config.Exportpath + "/articles/" + articlesPart.Articles[loopval].ID + ".html"
@@ -368,7 +377,9 @@ func main() {
 
 		for i := 0; i < loopsCount; i++ {
 			loopval := i
+			wg.Add(1)
 			go func() {
+				defer wg.Done()
 				var categoryArticlesPart ArticleList
 
 				err := client.List(
@@ -412,5 +423,6 @@ func main() {
 		}
 	}
 
+	wg.Wait()
 	log.Print("Rendering done!")
 }

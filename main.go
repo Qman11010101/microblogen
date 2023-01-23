@@ -136,6 +136,14 @@ func main() {
 		}
 	}
 
+	// 設定値出力
+	log.Print("Configuration values:")
+	log.Print(Config.AssetsDirName)
+	log.Print(Config.Exportpath)
+	log.Print(Config.PageShowLimit)
+	log.Print(Config.Templatepath)
+	log.Print("---------------")
+
 	// -----------------
 	// テンプレート存在確認
 	// -----------------

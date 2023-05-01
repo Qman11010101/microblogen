@@ -16,7 +16,7 @@ import (
 
 const configFile = "config.json"
 const copyAssetsFile = "copyassets.json"
-const VERSION = "1.1.1"
+const VERSION = "1.1.2"
 
 type ConfigStruct struct {
 	Apikey        string `json:"APIkey"`
@@ -66,6 +66,13 @@ type CategoryList struct {
 
 var Config ConfigStruct
 var CopyAssets CopyingAssets
+
+// Magic numbers
+const (
+	DEFAULT_PAGE_SHOW_LIMIT = 10
+	DEFAULT_LATEST_ARTICLES = 5
+	FREE_CONTENTS_LIMIT     = 10000
+)
 
 // Utility Function
 
@@ -127,12 +134,12 @@ func main() {
 			value, err := strconv.Atoi(PageShowLimit)
 			if err != nil {
 				log.Print("Warning: Environment variable 'PAGE_SHOW_LIMIT' is not integer; Use default value.")
-				Config.PageShowLimit = 10
+				Config.PageShowLimit = DEFAULT_PAGE_SHOW_LIMIT
 			} else {
 				Config.PageShowLimit = value
 			}
 		} else {
-			Config.PageShowLimit = 10
+			Config.PageShowLimit = DEFAULT_PAGE_SHOW_LIMIT
 		}
 	}
 
@@ -203,7 +210,7 @@ func main() {
 		microcms.ListParams{
 			Endpoint: "article",
 			Fields:   []string{"id", "title", "publishedAt", "updatedAt", "category.id", "category.name"},
-			Limit:    5,
+			Limit:    DEFAULT_LATEST_ARTICLES,
 			Orders:   []string{"-publishedAt"},
 		}, &articlesLatest)
 
@@ -319,7 +326,7 @@ func main() {
 		microcms.ListParams{
 			Endpoint: "category",
 			Fields:   []string{"id", "name"},
-			Limit:    10000, // 無料枠リミット
+			Limit:    FREE_CONTENTS_LIMIT,
 		},
 		&categoriesList,
 	)
@@ -351,7 +358,7 @@ func main() {
 			microcms.ListParams{
 				Endpoint: "article",
 				Fields:   []string{"id"},
-				Limit:    10000, // 無料枠リミット
+				Limit:    FREE_CONTENTS_LIMIT,
 				Orders:   []string{"-publishedAt"},
 				Filters:  "category[contains]" + categoryID,
 			}, &categoryArticlesMinimum)

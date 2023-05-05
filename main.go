@@ -7,6 +7,7 @@ import (
 	"os"
 	"regexp"
 	"strconv"
+	"strings"
 	"text/template"
 	"time"
 
@@ -16,7 +17,7 @@ import (
 
 const configFile = "config.json"
 const copyAssetsFile = "copyassets.json"
-const VERSION = "1.1.2"
+const VERSION = "1.2.0"
 
 type ConfigStruct struct {
 	Apikey        string `json:"APIkey"`
@@ -79,6 +80,24 @@ const (
 func fileExists(name string) bool {
 	_, err := os.Stat(name)
 	return !os.IsNotExist(err)
+}
+
+func convertWebp(html string) string {
+	// HTMLからimgタグのsrc属性を抽出するための正規表現
+	re := regexp.MustCompile(`<img[^>]*\bsrc\s*=\s*['"]?([^'">]+)['"]?[^>]*>`)
+
+	// 正規表現を使ってimgタグのsrc属性を抽出し、条件に合致するURLに"?fm=webp"を付加して置換する
+	convertedHTML := re.ReplaceAllStringFunc(html, func(match string) string {
+		url := re.FindStringSubmatch(match)[1]
+
+		if strings.HasPrefix(url, "https://images.microcms-assets.io/assets/") && (strings.HasSuffix(url, ".jpg") || strings.HasSuffix(url, ".png")) {
+			return strings.ReplaceAll(match, url, url+"?fm=webp")
+		}
+
+		return match
+	})
+
+	return convertedHTML
 }
 
 // main section
@@ -252,7 +271,8 @@ func main() {
 			r := []rune(htmlTagTrimReg.ReplaceAllString(body, ""))
 			return string(r[:int(math.Min(100, float64(len(r))))]) + "…"
 		},
-		"sub": func(a, b int) int { return a - b },
+		"sub":         func(a, b int) int { return a - b },
+		"replaceWebp": func(body string) string { return convertWebp(body) },
 	}
 
 	log.Print(">> Rendering start ")

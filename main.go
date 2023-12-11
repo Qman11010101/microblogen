@@ -163,10 +163,11 @@ func main() {
 
 	// 設定値出力
 	log.Print("Configuration values:")
-	log.Print(Config.AssetsDirName)
-	log.Print(Config.Exportpath)
-	log.Print(Config.PageShowLimit)
-	log.Print(Config.Templatepath)
+	log.Print("AssetsDirName: " + Config.AssetsDirName)
+	log.Print("Exportpath: " + Config.Exportpath)
+	log.Print("PageShowLimit: " + strconv.Itoa(Config.PageShowLimit))
+	log.Print("Templatepath: " + Config.Templatepath)
+	log.Print("Timezone: " + Config.Timezone)
 	log.Print("---------------")
 
 	// -----------------

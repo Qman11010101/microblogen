@@ -225,15 +225,14 @@ func main() {
 	// 先にミニマムなlatest用のやつ落としてcontent数(totalCount)を取得できるようにしておく
 	var articlesLatest ArticleList
 
-	err := client.List(
+	if err := client.List(
 		microcms.ListParams{
 			Endpoint: "article",
 			Fields:   []string{"id", "title", "publishedAt", "updatedAt", "category.id", "category.name"},
 			Limit:    DEFAULT_LATEST_ARTICLES,
 			Orders:   []string{"-publishedAt"},
-		}, &articlesLatest)
-
-	if err != nil {
+		}, &articlesLatest,
+	); err != nil {
 		log.Panic(err)
 	}
 
@@ -280,16 +279,15 @@ func main() {
 		log.Print("Rendering mainpage ", i+1, " / ", loopsCount)
 		var articlesPart ArticleList
 
-		err := client.List(
+		if err := client.List(
 			microcms.ListParams{
 				Endpoint: "article",
 				Fields:   []string{"id", "title", "body", "publishedAt", "updatedAt", "category.id", "category.name"},
 				Limit:    pageLimit,
 				Offset:   pageLimit * i,
 				Orders:   []string{"-publishedAt"},
-			}, &articlesPart)
-
-		if err != nil {
+			}, &articlesPart,
+		); err != nil {
 			log.Panic(err)
 		}
 
@@ -342,15 +340,14 @@ func main() {
 	// カテゴリ(タグ)の構造体
 	var categoriesList CategoryList
 
-	err = client.List(
+	if err := client.List(
 		microcms.ListParams{
 			Endpoint: "category",
 			Fields:   []string{"id", "name"},
 			Limit:    FREE_CONTENTS_LIMIT,
 		},
 		&categoriesList,
-	)
-	if err != nil {
+	); err != nil {
 		log.Panic(err)
 	}
 
@@ -374,16 +371,15 @@ func main() {
 		categoryID := categories[c].ID
 		log.Print("Rendering category ", c+1, " / ", len(categories), " '"+categoryID+"'")
 
-		err := client.List(
+		if err := client.List(
 			microcms.ListParams{
 				Endpoint: "article",
 				Fields:   []string{"id"},
 				Limit:    FREE_CONTENTS_LIMIT,
 				Orders:   []string{"-publishedAt"},
 				Filters:  "category[contains]" + categoryID,
-			}, &categoryArticlesMinimum)
-
-		if err != nil {
+			}, &categoryArticlesMinimum,
+		); err != nil {
 			log.Panic(err)
 		}
 
@@ -396,16 +392,15 @@ func main() {
 		for i := 0; i < loopsCount; i++ {
 			var categoryArticlesPart ArticleList
 
-			err := client.List(
+			if err := client.List(
 				microcms.ListParams{
 					Endpoint: "article",
 					Fields:   []string{"id", "title", "body", "publishedAt", "updatedAt", "category.id", "category.name"},
 					Limit:    pageLimit,
 					Offset:   pageLimit * i,
 					Filters:  "category[contains]" + categoryID,
-				}, &categoryArticlesPart)
-
-			if err != nil {
+				}, &categoryArticlesPart,
+			); err != nil {
 				log.Panic(err)
 			}
 

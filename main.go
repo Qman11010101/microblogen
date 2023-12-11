@@ -76,7 +76,6 @@ const (
 )
 
 // Utility Function
-
 func fileExists(name string) bool {
 	_, err := os.Stat(name)
 	return !os.IsNotExist(err)

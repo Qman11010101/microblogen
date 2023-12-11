@@ -26,6 +26,7 @@ type ConfigStruct struct {
 	Templatepath  string `json:"templatePath"`
 	AssetsDirName string `json:"assetsDirName"`
 	PageShowLimit int    `json:"pageShowLimit"`
+	Timezone      string `json:"timezone"`
 }
 type CopyingAssets struct {
 	Assets []string `json:"assets"`
@@ -121,6 +122,11 @@ func main() {
 		if err != nil {
 			log.Panic(err)
 		}
+
+		// Timezone未設定ならUTC
+		if Config.Timezone == "" {
+			Config.Timezone = "UTC"
+		}
 	} else {
 		log.Print(configFile, " not found. Loading the setting values from environment variables instead")
 		Apikey, ok := os.LookupEnv("MICROCMS_API_KEY")
@@ -159,6 +165,17 @@ func main() {
 		} else {
 			Config.PageShowLimit = DEFAULT_PAGE_SHOW_LIMIT
 		}
+		Timezone, ok := os.LookupEnv("TIMEZONE")
+		if ok {
+			Config.Timezone = Timezone
+		} else {
+			Config.Timezone = "UTC"
+		}
+	}
+
+	tz, err := time.LoadLocation(Config.Timezone)
+	if err != nil {
+		log.Fatal("Error: Invalid timezone: " + Config.Timezone)
 	}
 
 	// 設定値出力
@@ -262,7 +279,7 @@ func main() {
 
 	// ヘルパー関数
 	functionMapping := template.FuncMap{
-		"formatTime":   func(t time.Time) string { return t.Format("2006-01-02") },
+		"formatTime":   func(t time.Time) string { return t.In(tz).Format("2006-01-02") },
 		"totalGreater": func(total, limit int) bool { return total > limit },
 		"isNotFirst":   func(offset int) bool { return offset != 0 },
 		"isNotLast":    func(limit, offset, total int) bool { return limit+offset < total },

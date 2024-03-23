@@ -17,7 +17,7 @@ import (
 
 const configFile = "config.json"
 const copyAssetsFile = "copyassets.json"
-const VERSION = "1.3.0"
+const VERSION = "1.3.1"
 
 type ConfigStruct struct {
 	Apikey        string `json:"APIkey"`
@@ -289,6 +289,7 @@ func main() {
 		},
 		"sub":         func(a, b int) int { return a - b },
 		"replaceWebp": func(body string) string { return convertWebp(body) },
+		"buildTime":   func() string { return strconv.FormatInt(time.Now().Unix(), 10) },
 	}
 
 	log.Print(">> Rendering start ")

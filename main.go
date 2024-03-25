@@ -17,7 +17,9 @@ import (
 
 const configFile = "config.json"
 const copyAssetsFile = "copyassets.json"
-const VERSION = "1.3.1"
+const VERSION = "1.4.0"
+
+const componentsDirPath = "/components"
 
 type ConfigStruct struct {
 	Apikey        string `json:"APIkey"`
@@ -204,6 +206,24 @@ func main() {
 		}
 	}
 
+	// コンポーネント一覧を取得(なければディレクトリだけ生成)
+	var componentDirPath = Config.Templatepath + componentsDirPath
+	componentFiles, err := os.ReadDir(componentDirPath)
+	if err != nil {
+		log.Print("Warning: Components directory not found. The directory will be automatically generated.")
+		if err := os.Mkdir(componentDirPath, 0755); err != nil {
+			log.Panic(err)
+		}
+	}
+
+	var componentFilesName []string
+
+	for _, file := range componentFiles {
+		if !file.IsDir() {
+			componentFilesName = append(componentFilesName, componentDirPath+"/"+file.Name())
+		}
+	}
+
 	log.Print(">> Generating export directory")
 	os.MkdirAll(Config.Exportpath+"/articles/category/", 0777)
 
@@ -315,7 +335,8 @@ func main() {
 		articlesPart.Root = "/"
 
 		// トップページ(index.html)レンダリング
-		indexTemplate := template.Must(template.New("index.html").Funcs(functionMapping).ParseFiles(Config.Templatepath + "/index.html"))
+		plusIdx := append([]string{Config.Templatepath + "/index.html"}, componentFilesName...)
+		indexTemplate := template.Must(template.New("index.html").Funcs(functionMapping).ParseFiles(plusIdx...))
 		var outputFilePath string
 		if i == 0 {
 			outputFilePath = Config.Exportpath + "/index.html"
@@ -337,7 +358,8 @@ func main() {
 		// 記事レンダリング
 		for a := 0; a < len(articlesPart.Articles); a++ {
 			log.Print("- Rendering articles ", pageLimit*i+a+1, " / ", articlesPart.Totalcount)
-			articleTemplate := template.Must(template.New("article.html").Funcs(functionMapping).ParseFiles(Config.Templatepath + "/article.html"))
+			plusAtc := append([]string{Config.Templatepath + "/article.html"}, componentFilesName...)
+			articleTemplate := template.Must(template.New("article.html").Funcs(functionMapping).ParseFiles(plusAtc...))
 			outputFilePath := Config.Exportpath + "/articles/" + articlesPart.Articles[a].ID + ".html"
 			articleOutputFile, err := os.Create(outputFilePath)
 			if err != nil {
@@ -428,7 +450,8 @@ func main() {
 			categoryArticlesPart.Root = "/articles/category/" + categoryID + "/"
 
 			// カテゴリのトップページ(index.html)レンダリング
-			categoryIndexTemplate := template.Must(template.New("index.html").Funcs(functionMapping).ParseFiles(Config.Templatepath + "/index.html"))
+			plusCatIdx := append([]string{Config.Templatepath + "/index.html"}, componentFilesName...)
+			categoryIndexTemplate := template.Must(template.New("index.html").Funcs(functionMapping).ParseFiles(plusCatIdx...))
 			var categoryOutputFilePath string
 			if i == 0 {
 				categoryOutputFilePath = categoryOutputBasePath + "/index.html"

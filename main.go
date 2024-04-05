@@ -8,6 +8,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 	"text/template"
 	"time"
 
@@ -356,21 +357,27 @@ func main() {
 		}
 
 		// 記事レンダリング
+		var wgArticles sync.WaitGroup
 		for a := 0; a < len(articlesPart.Articles); a++ {
-			log.Print("- Rendering articles ", pageLimit*i+a+1, " / ", articlesPart.Totalcount)
-			plusAtc := append([]string{Config.Templatepath + "/article.html"}, componentFilesName...)
-			articleTemplate := template.Must(template.New("article.html").Funcs(functionMapping).ParseFiles(plusAtc...))
-			outputFilePath := Config.Exportpath + "/articles/" + articlesPart.Articles[a].ID + ".html"
-			articleOutputFile, err := os.Create(outputFilePath)
-			if err != nil {
-				log.Panic(err)
-			}
-			defer articleOutputFile.Close()
+			wgArticles.Add(1)
+			go func(i int, a int) {
+				log.Print("- Rendering articles ", pageLimit*i+a+1, " / ", articlesPart.Totalcount)
+				plusAtc := append([]string{Config.Templatepath + "/article.html"}, componentFilesName...)
+				articleTemplate := template.Must(template.New("article.html").Funcs(functionMapping).ParseFiles(plusAtc...))
+				outputFilePath := Config.Exportpath + "/articles/" + articlesPart.Articles[a].ID + ".html"
+				articleOutputFile, err := os.Create(outputFilePath)
+				if err != nil {
+					log.Panic(err)
+				}
+				defer articleOutputFile.Close()
 
-			if err := articleTemplate.Execute(articleOutputFile, articlesPart.Articles[a]); err != nil {
-				log.Panic(err)
-			}
+				if err := articleTemplate.Execute(articleOutputFile, articlesPart.Articles[a]); err != nil {
+					log.Panic(err)
+				}
+				wgArticles.Done()
+			}(i, a)
 		}
+		wgArticles.Wait()
 	}
 
 	// ---------------
@@ -406,71 +413,78 @@ func main() {
 
 	// カテゴリレンダリング
 	categories := categoriesList.Categories
+	var wgCategories sync.WaitGroup
 	for c := 0; c < len(categories); c++ {
-		var categoryArticlesMinimum ArticleList
-		categoryID := categories[c].ID
-		log.Print("Rendering category ", c+1, " / ", len(categories), " '"+categoryID+"'")
-
-		if err := client.List(
-			microcms.ListParams{
-				Endpoint: "article",
-				Fields:   []string{"id"},
-				Limit:    FREE_CONTENTS_LIMIT,
-				Orders:   []string{"-publishedAt"},
-				Filters:  "category[contains]" + categoryID,
-			}, &categoryArticlesMinimum,
-		); err != nil {
-			log.Panic(err)
-		}
-
-		contentsCount := categoryArticlesMinimum.Totalcount
-		loopsCount := int(math.Ceil(float64(contentsCount) / float64(pageLimit)))
-
-		categoryOutputBasePath := Config.Exportpath + "/articles/category/" + categoryID
-		os.MkdirAll(categoryOutputBasePath, 0755)
-
-		for i := 0; i < loopsCount; i++ {
-			var categoryArticlesPart ArticleList
+		wgCategories.Add(1)
+		go func(c int) {
+			var categoryArticlesMinimum ArticleList
+			categoryID := categories[c].ID
+			log.Print("Rendering category ", c+1, " / ", len(categories), " '"+categoryID+"'")
 
 			if err := client.List(
 				microcms.ListParams{
 					Endpoint: "article",
-					Fields:   []string{"id", "title", "body", "publishedAt", "updatedAt", "category.id", "category.name"},
-					Limit:    pageLimit,
-					Offset:   pageLimit * i,
+					Fields:   []string{"id"},
+					Limit:    FREE_CONTENTS_LIMIT,
+					Orders:   []string{"-publishedAt"},
 					Filters:  "category[contains]" + categoryID,
-				}, &categoryArticlesPart,
+				}, &categoryArticlesMinimum,
 			); err != nil {
 				log.Panic(err)
 			}
 
-			categoryArticlesPart.NextPage = i + 2
-			categoryArticlesPart.PrevPage = i
-			categoryArticlesPart.AllPage = loopsCount
-			categoryArticlesPart.Root = "/articles/category/" + categoryID + "/"
+			contentsCount := categoryArticlesMinimum.Totalcount
+			loopsCount := int(math.Ceil(float64(contentsCount) / float64(pageLimit)))
 
-			// カテゴリのトップページ(index.html)レンダリング
-			plusCatIdx := append([]string{Config.Templatepath + "/index.html"}, componentFilesName...)
-			categoryIndexTemplate := template.Must(template.New("index.html").Funcs(functionMapping).ParseFiles(plusCatIdx...))
-			var categoryOutputFilePath string
-			if i == 0 {
-				categoryOutputFilePath = categoryOutputBasePath + "/index.html"
-			} else {
-				basePath := categoryOutputBasePath + "/page/" + strconv.Itoa(i+1)
-				os.MkdirAll(basePath, 0755)
-				categoryOutputFilePath = basePath + "/index.html"
-			}
-			indexOutputFile, err := os.Create(categoryOutputFilePath)
-			if err != nil {
-				log.Panic(err)
-			}
-			defer indexOutputFile.Close()
+			categoryOutputBasePath := Config.Exportpath + "/articles/category/" + categoryID
+			os.MkdirAll(categoryOutputBasePath, 0755)
 
-			if err := categoryIndexTemplate.Execute(indexOutputFile, categoryArticlesPart); err != nil {
-				log.Panic(err)
+			for i := 0; i < loopsCount; i++ {
+				var categoryArticlesPart ArticleList
+
+				if err := client.List(
+					microcms.ListParams{
+						Endpoint: "article",
+						Fields:   []string{"id", "title", "body", "publishedAt", "updatedAt", "category.id", "category.name"},
+						Limit:    pageLimit,
+						Offset:   pageLimit * i,
+						Filters:  "category[contains]" + categoryID,
+					}, &categoryArticlesPart,
+				); err != nil {
+					log.Panic(err)
+				}
+
+				categoryArticlesPart.NextPage = i + 2
+				categoryArticlesPart.PrevPage = i
+				categoryArticlesPart.AllPage = loopsCount
+				categoryArticlesPart.Root = "/articles/category/" + categoryID + "/"
+
+				// カテゴリのトップページ(index.html)レンダリング
+				plusCatIdx := append([]string{Config.Templatepath + "/index.html"}, componentFilesName...)
+				categoryIndexTemplate := template.Must(template.New("index.html").Funcs(functionMapping).ParseFiles(plusCatIdx...))
+				var categoryOutputFilePath string
+				if i == 0 {
+					categoryOutputFilePath = categoryOutputBasePath + "/index.html"
+				} else {
+					basePath := categoryOutputBasePath + "/page/" + strconv.Itoa(i+1)
+					os.MkdirAll(basePath, 0755)
+					categoryOutputFilePath = basePath + "/index.html"
+				}
+				indexOutputFile, err := os.Create(categoryOutputFilePath)
+				if err != nil {
+					log.Panic(err)
+				}
+				defer indexOutputFile.Close()
+
+				if err := categoryIndexTemplate.Execute(indexOutputFile, categoryArticlesPart); err != nil {
+					log.Panic(err)
+				}
 			}
-		}
+			wgCategories.Done()
+		}(c)
 	}
+
+	wgCategories.Wait()
 
 	log.Print("Rendering done!")
 }

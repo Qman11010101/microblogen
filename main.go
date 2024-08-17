@@ -23,27 +23,31 @@ const VERSION = "1.5.1"
 const componentsDirPath = "/components"
 
 type ConfigStruct struct {
-	Apikey        string `json:"APIkey"`
-	Servicedomain string `json:"serviceDomain"`
-	Exportpath    string `json:"exportPath"`
-	Templatepath  string `json:"templatePath"`
-	AssetsDirName string `json:"assetsDirName"`
-	PageShowLimit int    `json:"pageShowLimit"`
-	Timezone      string `json:"timezone"`
+	Apikey          string `json:"APIkey"`
+	Servicedomain   string `json:"serviceDomain"`
+	Exportpath      string `json:"exportPath"`
+	Templatepath    string `json:"templatePath"`
+	AssetsDirName   string `json:"assetsDirName"`
+	PageShowLimit   int    `json:"pageShowLimit"`
+	Timezone        string `json:"timezone"`
+	CategoryTagName string `json:"categoryTagName"`
+	TimeArchiveName string `json:"timeArchiveName"`
 }
 type CopyingAssets struct {
 	Assets []string `json:"assets"`
 }
 
 type ArticleList struct {
-	Articles   []Article `json:"contents"`
-	Totalcount int       `json:"totalCount"`
-	Offset     int       `json:"offset"`
-	Limit      int       `json:"limit"`
-	NextPage   int
-	PrevPage   int
-	AllPage    int
-	Root       string
+	Articles    []Article `json:"contents"`
+	Totalcount  int       `json:"totalCount"`
+	Offset      int       `json:"offset"`
+	Limit       int       `json:"limit"`
+	NextPage    int
+	PrevPage    int
+	AllPage     int
+	Root        string
+	IsIndex     bool
+	ArchiveName string
 }
 type Body struct {
 	Fieldid string `json:"fieldId"`
@@ -173,6 +177,18 @@ func main() {
 			Config.Timezone = Timezone
 		} else {
 			Config.Timezone = "UTC"
+		}
+		CategoryTagName, ok := os.LookupEnv("CATEGORY_TAG_NAME")
+		if ok {
+			Config.CategoryTagName = CategoryTagName
+		} else {
+			Config.CategoryTagName = "Category"
+		}
+		TimeArchiveName, ok := os.LookupEnv("TIME_ARCHIVE_NAME")
+		if ok {
+			Config.TimeArchiveName = TimeArchiveName
+		} else {
+			Config.TimeArchiveName = "Archive"
 		}
 	}
 
@@ -321,7 +337,7 @@ func main() {
 		if err := client.List(
 			microcms.ListParams{
 				Endpoint: "article",
-				Fields:   []string{"id", "title", "body", "publishedAt", "updatedAt", "category.id", "category.name"},
+				Fields:   []string{"id", "title", "event", "body", "publishedAt", "updatedAt", "category.id", "category.name"},
 				Limit:    pageLimit,
 				Offset:   pageLimit * i,
 				Orders:   []string{"-publishedAt"},
@@ -334,6 +350,7 @@ func main() {
 		articlesPart.PrevPage = i
 		articlesPart.AllPage = loopsCount
 		articlesPart.Root = "/"
+		articlesPart.IsIndex = true
 
 		// トップページ(index.html)レンダリング
 		plusIdx := append([]string{Config.Templatepath + "/index.html"}, componentFilesName...)
@@ -445,7 +462,7 @@ func main() {
 				if err := client.List(
 					microcms.ListParams{
 						Endpoint: "article",
-						Fields:   []string{"id", "title", "body", "publishedAt", "updatedAt", "category.id", "category.name"},
+						Fields:   []string{"id", "title", "body", "event", "publishedAt", "updatedAt", "category.id", "category.name"},
 						Limit:    pageLimit,
 						Offset:   pageLimit * i,
 						Filters:  "category[contains]" + categoryID,
@@ -458,6 +475,8 @@ func main() {
 				categoryArticlesPart.PrevPage = i
 				categoryArticlesPart.AllPage = loopsCount
 				categoryArticlesPart.Root = "/articles/category/" + categoryID + "/"
+				categoryArticlesPart.IsIndex = false
+				categoryArticlesPart.ArchiveName = Config.CategoryTagName + ": " + categories[c].Name
 
 				// カテゴリのトップページ(index.html)レンダリング
 				plusCatIdx := append([]string{Config.Templatepath + "/index.html"}, componentFilesName...)

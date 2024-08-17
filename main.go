@@ -18,7 +18,7 @@ import (
 
 const configFile = "config.json"
 const copyAssetsFile = "copyassets.json"
-const VERSION = "1.6.2"
+const VERSION = "1.6.3"
 
 const componentsDirPath = "/components"
 
@@ -65,6 +65,11 @@ type Article struct {
 	PublishedAt time.Time  `json:"publishedAt,omitempty"`
 	UpdatedAt   time.Time  `json:"updatedAt,omitempty"`
 	Category    []Category `json:"category,omitempty"`
+	Event       Event      `json:"event,omitempty"`
+}
+type Event struct {
+	EventText string `json:"eventText,omitempty"`
+	EventLink string `json:"eventLink,omitempty"`
 }
 type CategoryList struct {
 	Categories []Category `json:"contents,omitempty"`

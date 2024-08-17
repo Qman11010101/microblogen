@@ -18,7 +18,7 @@ import (
 
 const configFile = "config.json"
 const copyAssetsFile = "copyassets.json"
-const VERSION = "1.5.1"
+const VERSION = "1.6.2"
 
 const componentsDirPath = "/components"
 

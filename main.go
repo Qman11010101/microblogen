@@ -18,7 +18,7 @@ import (
 
 const configFile = "config.json"
 const copyAssetsFile = "copyassets.json"
-const VERSION = "1.6.3"
+const VERSION = "1.7.0"
 
 const componentsDirPath = "/components"
 
@@ -335,6 +335,10 @@ func main() {
 	}
 
 	log.Print(">> Rendering start ")
+
+	var mu sync.Mutex
+	articleCounter := 0
+
 	for i := 0; i < loopsCount; i++ {
 		log.Print("Rendering mainpage ", i+1, " / ", loopsCount)
 		var articlesPart ArticleList
@@ -380,10 +384,10 @@ func main() {
 
 		// 記事レンダリング
 		var wgArticles sync.WaitGroup
+
 		for a := 0; a < len(articlesPart.Articles); a++ {
 			wgArticles.Add(1)
 			go func(i int, a int) {
-				log.Print("- Rendering articles ", pageLimit*i+a+1, " / ", articlesPart.Totalcount)
 				plusAtc := append([]string{Config.Templatepath + "/article.html"}, componentFilesName...)
 				articleTemplate := template.Must(template.New("article.html").Funcs(functionMapping).ParseFiles(plusAtc...))
 				outputFilePath := Config.Exportpath + "/articles/" + articlesPart.Articles[a].ID + ".html"
@@ -396,6 +400,11 @@ func main() {
 				if err := articleTemplate.Execute(articleOutputFile, articlesPart.Articles[a]); err != nil {
 					log.Panic(err)
 				}
+
+				mu.Lock()
+				articleCounter++
+				log.Print("- Rendered articles ", articleCounter, " / ", articlesPart.Totalcount)
+				mu.Unlock()
 				wgArticles.Done()
 			}(i, a)
 		}
@@ -436,12 +445,12 @@ func main() {
 	// カテゴリレンダリング
 	categories := categoriesList.Categories
 	var wgCategories sync.WaitGroup
+	categoryCounter := 0
 	for c := 0; c < len(categories); c++ {
 		wgCategories.Add(1)
 		go func(c int) {
 			var categoryArticlesMinimum ArticleList
 			categoryID := categories[c].ID
-			log.Print("Rendering category ", c+1, " / ", len(categories), " '"+categoryID+"'")
 
 			if err := client.List(
 				microcms.ListParams{
@@ -504,6 +513,11 @@ func main() {
 					log.Panic(err)
 				}
 			}
+
+			mu.Lock()
+			categoryCounter++
+			mu.Unlock()
+			log.Print("Rendered category ", categoryCounter, " / ", len(categories), " '"+categoryID+"'")
 			wgCategories.Done()
 		}(c)
 	}

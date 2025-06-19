@@ -13,7 +13,6 @@ import (
 	"time"
 
 	"github.com/microcmsio/microcms-go-sdk"
-	"github.com/otiai10/copy"
 )
 
 const configFile = "config.json"
@@ -32,9 +31,6 @@ type ConfigStruct struct {
 	Timezone        string `json:"timezone"`
 	CategoryTagName string `json:"categoryTagName"`
 	TimeArchiveName string `json:"timeArchiveName"`
-}
-type CopyingAssets struct {
-	Assets []string `json:"assets"`
 }
 
 type ArticleList struct {
@@ -79,7 +75,6 @@ type CategoryList struct {
 }
 
 var Config ConfigStruct
-var CopyAssets CopyingAssets
 
 // Magic numbers
 const (
@@ -249,34 +244,12 @@ func main() {
 	log.Print(">> Generating export directory")
 	os.MkdirAll(Config.Exportpath+"/articles/category/", 0777)
 
-	// ------------
-	// アセットコピー
-	// ------------
-	if fileExists(copyAssetsFile) {
-		copyAssetsFileBytes, err := os.ReadFile(copyAssetsFile)
-		if err != nil {
-			log.Panic(err)
-		}
-
-		err = json.Unmarshal([]byte(copyAssetsFileBytes), &CopyAssets)
-		if err != nil {
-			log.Panic(err)
-		}
-
-		log.Print(">> Copying assets")
-
-		for i := 0; i < len(CopyAssets.Assets); i++ {
-			assetObjName := CopyAssets.Assets[i]
-			if fileExists(Config.Templatepath + "/" + assetObjName) {
-				log.Print(">>>> Copying " + assetObjName)
-				copy.Copy(Config.Templatepath+"/"+assetObjName, Config.Exportpath+"/"+assetObjName)
-			} else {
-				log.Print("Warning: " + assetObjName + " does not exist; Skipped!")
-			}
-		}
-	} else {
-		log.Print("Warning: " + copyAssetsFile + " not found; No assets will be copied. Please prepare '" + copyAssetsFile + "' if you want to copy assets.")
-	}
+	// TODO
+	// .mbignoreに記載されたファイル：除外
+	// 記載されていないhtmlファイル：レンダリング（レンダリングされる部分がない場合はそのファイルがコピーされる挙動にする）
+	// 記載されていない非htmlファイル：コピー（画像やCSSなど）
+	// config.jsonにテンプレートの拡張子を指定できるようにしてもいいかも　デフォルトはhtml
+	// componentsディレクトリも除外対象ではあるので、ここらへんをもう少しわかりやすい形にしたい
 
 	// microcms用クライアントインスタンス生成
 	client := microcms.New(Config.Servicedomain, Config.Apikey)

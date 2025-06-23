@@ -136,7 +136,7 @@ func main() {
 		}
 
 		if Config.PageShowLimit <= 0 {
-			log.Printf("Warning: pageShowLimit is %d; using default %d", Config.PageShowLimit, DEFAULT_PAGE_SHOW_LIMIT)
+			log.Printf("Warning: pageShowLimit from config.json is %d (non-positive); using default %d", Config.PageShowLimit, DEFAULT_PAGE_SHOW_LIMIT)
 			Config.PageShowLimit = DEFAULT_PAGE_SHOW_LIMIT
 		}
 

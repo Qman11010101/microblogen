@@ -269,7 +269,9 @@ func main() {
 			assetObjName := CopyAssets.Assets[i]
 			if fileExists(Config.Templatepath + "/" + assetObjName) {
 				log.Print(">>>> Copying " + assetObjName)
-				copy.Copy(Config.Templatepath+"/"+assetObjName, Config.Exportpath+"/"+assetObjName)
+				if err := copy.Copy(Config.Templatepath+"/"+assetObjName, Config.Exportpath+"/"+assetObjName); err != nil {
+					log.Panic(err)
+				}
 			} else {
 				log.Print("Warning: " + assetObjName + " does not exist; Skipped!")
 			}

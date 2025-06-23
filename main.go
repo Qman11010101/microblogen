@@ -174,7 +174,7 @@ func main() {
 		if ok {
 			value, err := strconv.Atoi(PageShowLimit)
 			if err != nil || value <= 0 {
-				log.Print("Warning: Environment variable 'PAGE_SHOW_LIMIT' is not positive integer; Use default value.")
+				log.Printf("Warning: Environment variable 'PAGE_SHOW_LIMIT' is '%s' which is not a positive integer; Using default value %d.", PageShowLimit, DEFAULT_PAGE_SHOW_LIMIT)
 				Config.PageShowLimit = DEFAULT_PAGE_SHOW_LIMIT
 			} else {
 				Config.PageShowLimit = value

@@ -135,6 +135,11 @@ func main() {
 			log.Panic(err)
 		}
 
+		if Config.PageShowLimit <= 0 {
+			log.Printf("Warning: pageShowLimit is %d; using default %d", Config.PageShowLimit, DEFAULT_PAGE_SHOW_LIMIT)
+			Config.PageShowLimit = DEFAULT_PAGE_SHOW_LIMIT
+		}
+
 		// Timezone未設定ならUTC
 		if Config.Timezone == "" {
 			Config.Timezone = "UTC"
@@ -168,8 +173,8 @@ func main() {
 		PageShowLimit, ok := os.LookupEnv("PAGE_SHOW_LIMIT")
 		if ok {
 			value, err := strconv.Atoi(PageShowLimit)
-			if err != nil {
-				log.Print("Warning: Environment variable 'PAGE_SHOW_LIMIT' is not integer; Use default value.")
+			if err != nil || value <= 0 {
+				log.Print("Warning: Environment variable 'PAGE_SHOW_LIMIT' is not positive integer; Use default value.")
 				Config.PageShowLimit = DEFAULT_PAGE_SHOW_LIMIT
 			} else {
 				Config.PageShowLimit = value

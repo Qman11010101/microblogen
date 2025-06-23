@@ -269,7 +269,7 @@ func main() {
 			assetObjName := CopyAssets.Assets[i]
 			if fileExists(Config.Templatepath + "/" + assetObjName) {
 				log.Print(">>>> Copying " + assetObjName)
-				if err := copy.Copy(Config.Templatepath+"/"+assetObjName, Config.Exportpath+"/"+assetObjName); err != nil {
+				if err := copy.Copy(filepath.Join(Config.Templatepath, assetObjName), filepath.Join(Config.Exportpath, assetObjName)); err != nil {
 					log.Panic(err)
 				}
 			} else {

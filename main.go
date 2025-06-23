@@ -13,7 +13,6 @@ import (
 	"time"
 
 	"github.com/microcmsio/microcms-go-sdk"
-	"github.com/otiai10/copy"
 )
 
 const configFile = "config.json"
@@ -32,9 +31,6 @@ type ConfigStruct struct {
 	Timezone        string `json:"timezone"`
 	CategoryTagName string `json:"categoryTagName"`
 	TimeArchiveName string `json:"timeArchiveName"`
-}
-type CopyingAssets struct {
-	Assets []string `json:"assets"`
 }
 
 type ArticleList struct {
@@ -79,7 +75,6 @@ type CategoryList struct {
 }
 
 var Config ConfigStruct
-var CopyAssets CopyingAssets
 
 // Magic numbers
 const (
@@ -135,6 +130,11 @@ func main() {
 			log.Panic(err)
 		}
 
+		if Config.PageShowLimit <= 0 {
+			log.Printf("Warning: pageShowLimit from config.json is %d (non-positive); using default %d", Config.PageShowLimit, DEFAULT_PAGE_SHOW_LIMIT)
+			Config.PageShowLimit = DEFAULT_PAGE_SHOW_LIMIT
+		}
+
 		// Timezone未設定ならUTC
 		if Config.Timezone == "" {
 			Config.Timezone = "UTC"
@@ -168,8 +168,8 @@ func main() {
 		PageShowLimit, ok := os.LookupEnv("PAGE_SHOW_LIMIT")
 		if ok {
 			value, err := strconv.Atoi(PageShowLimit)
-			if err != nil {
-				log.Print("Warning: Environment variable 'PAGE_SHOW_LIMIT' is not integer; Use default value.")
+			if err != nil || value <= 0 {
+				log.Printf("Warning: Environment variable 'PAGE_SHOW_LIMIT' is '%s' which is not a positive integer; Using default value %d.", PageShowLimit, DEFAULT_PAGE_SHOW_LIMIT)
 				Config.PageShowLimit = DEFAULT_PAGE_SHOW_LIMIT
 			} else {
 				Config.PageShowLimit = value
@@ -249,36 +249,13 @@ func main() {
 	log.Print(">> Generating export directory")
 	os.MkdirAll(Config.Exportpath+"/articles/category/", 0777)
 
-	// ------------
-	// アセットコピー
-	// ------------
-	if fileExists(copyAssetsFile) {
-		copyAssetsFileBytes, err := os.ReadFile(copyAssetsFile)
-		if err != nil {
-			log.Panic(err)
-		}
 
-		err = json.Unmarshal([]byte(copyAssetsFileBytes), &CopyAssets)
-		if err != nil {
-			log.Panic(err)
-		}
-
-		log.Print(">> Copying assets")
-
-		for i := 0; i < len(CopyAssets.Assets); i++ {
-			assetObjName := CopyAssets.Assets[i]
-			if fileExists(Config.Templatepath + "/" + assetObjName) {
-				log.Print(">>>> Copying " + assetObjName)
-				if err := copy.Copy(filepath.Join(Config.Templatepath, assetObjName), filepath.Join(Config.Exportpath, assetObjName)); err != nil {
-					log.Panic(err)
-				}
-			} else {
-				log.Print("Warning: " + assetObjName + " does not exist; Skipped!")
-			}
-		}
-	} else {
-		log.Print("Warning: " + copyAssetsFile + " not found; No assets will be copied. Please prepare '" + copyAssetsFile + "' if you want to copy assets.")
-	}
+	// TODO
+	// .mbignoreに記載されたファイル：除外
+	// 記載されていないhtmlファイル：レンダリング（レンダリングされる部分がない場合はそのファイルがコピーされる挙動にする）
+	// 記載されていない非htmlファイル：コピー（画像やCSSなど）
+	// config.jsonにテンプレートの拡張子を指定できるようにしてもいいかも　デフォルトはhtml
+	// componentsディレクトリも除外対象ではあるので、ここらへんをもう少しわかりやすい形にしたい
 
 	// microcms用クライアントインスタンス生成
 	client := microcms.New(Config.Servicedomain, Config.Apikey)

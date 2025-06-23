@@ -249,6 +249,7 @@ func main() {
 	log.Print(">> Generating export directory")
 	os.MkdirAll(Config.Exportpath+"/articles/category/", 0777)
 
+
 	// TODO
 	// .mbignoreに記載されたファイル：除外
 	// 記載されていないhtmlファイル：レンダリング（レンダリングされる部分がない場合はそのファイルがコピーされる挙動にする）

@@ -82,12 +82,6 @@ const (
 	FREE_CONTENTS_LIMIT     = 10000
 )
 
-// Utility Function
-func fileExists(name string) bool {
-	_, err := os.Stat(name)
-	return !os.IsNotExist(err)
-}
-
 // main section
 
 func main() {
@@ -100,7 +94,7 @@ func main() {
 	// ------------------------
 	// 設定ファイル/環境変数読み込み
 	// ------------------------
-	if fileExists(configFile) {
+	if FileExists(configFile) {
 		configFileBytes, err := os.ReadFile(configFile)
 		if err != nil {
 			log.Panic(err)
@@ -195,14 +189,14 @@ func main() {
 	// -----------------
 	// テンプレート存在確認
 	// -----------------
-	if !fileExists(Config.Templatepath) || !fileExists(Config.Templatepath+"/article.html") || !fileExists(Config.Templatepath+"/index.html") {
+	if !FileExists(Config.Templatepath) || !FileExists(Config.Templatepath+"/article.html") || !FileExists(Config.Templatepath+"/index.html") {
 		log.Fatal("Error: Missing templates. You must prepare \"article.html\" and \"index.html\" inside ./" + Config.Templatepath + ".")
 	}
 
 	// ---------------
 	// 出力フォルダ再生成
 	// ---------------
-	if fileExists(Config.Exportpath) {
+	if FileExists(Config.Exportpath) {
 		log.Print(">> Removing existing export directory")
 		if err := os.RemoveAll(Config.Exportpath); err != nil {
 			log.Panic(err)

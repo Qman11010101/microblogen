@@ -10,27 +10,17 @@ import (
 	"text/template"
 	"time"
 
+	"github.com/joho/godotenv"
 	"github.com/microcmsio/microcms-go-sdk"
+	"github.com/otiai10/copy"
 )
 
-const configFile = "config.json"
+const cfgFile = "cfg.json"
 
 // const copyAssetsFile = "copyassets.json"
 const VERSION = "2.0.0"
 
 const componentsDirPath = "/components"
-
-type ConfigStruct struct {
-	Apikey          string `json:"APIkey"`
-	Servicedomain   string `json:"serviceDomain"`
-	Exportpath      string `json:"exportPath"`
-	Templatepath    string `json:"templatePath"`
-	AssetsDirName   string `json:"assetsDirName"`
-	PageShowLimit   int    `json:"pageShowLimit"`
-	Timezone        string `json:"timezone"`
-	CategoryTagName string `json:"categoryTagName"`
-	TimeArchiveName string `json:"timeArchiveName"`
-}
 
 type ArticleList struct {
 	Articles    []Article `json:"contents"`
@@ -73,8 +63,6 @@ type CategoryList struct {
 	Limit      int        `json:"limit,omitempty"`
 }
 
-var Config ConfigStruct
-
 // Magic numbers
 const (
 	DEFAULT_PAGE_SHOW_LIMIT = 10
@@ -85,126 +73,38 @@ const (
 // main section
 
 func main() {
+	err := godotenv.Load()
+	if err != nil {
+		log.Fatal("Error loading .env file")
+	}
+
 	log.SetFlags(log.Ltime)
 	log.Print("microblogen v" + VERSION)
 
-	// ID引数に取って差分レンダリングできそう？
-	// arguments := os.Args[1:]
-
-	// ------------------------
-	// 設定ファイル/環境変数読み込み
-	// ------------------------
-	if FileExists(configFile) {
-		configFileBytes, err := os.ReadFile(configFile)
-		if err != nil {
-			log.Panic(err)
-		}
-
-		err = json.Unmarshal([]byte(configFileBytes), &Config)
-		if err != nil {
-			log.Panic(err)
-		}
-
-		if Config.PageShowLimit <= 0 {
-			log.Printf("Warning: pageShowLimit from config.json is %d (non-positive); using default %d", Config.PageShowLimit, DEFAULT_PAGE_SHOW_LIMIT)
-			Config.PageShowLimit = DEFAULT_PAGE_SHOW_LIMIT
-		}
-
-		// Timezone未設定ならUTC
-		if Config.Timezone == "" {
-			Config.Timezone = "UTC"
-		}
-	} else {
-		log.Print(configFile, " not found. Loading the setting values from environment variables instead")
-		Apikey, ok := os.LookupEnv("MICROCMS_API_KEY")
-		if ok {
-			Config.Apikey = Apikey
-		} else {
-			log.Fatal("Error: Environment variable 'MICROCMS_API_KEY' not found.")
-		}
-		Servicedomain, ok := os.LookupEnv("SERVICE_DOMAIN")
-		if ok {
-			Config.Servicedomain = Servicedomain
-		} else {
-			log.Fatal("Error: Environment variable 'SERVICE_DOMAIN' not found.")
-		}
-		Exportpath, ok := os.LookupEnv("EXPORT_PATH")
-		if ok {
-			Config.Exportpath = Exportpath
-		} else {
-			Config.Exportpath = "./output"
-		}
-		Templatepath, ok := os.LookupEnv("TEMPLATE_PATH")
-		if ok {
-			Config.Templatepath = Templatepath
-		} else {
-			Config.Templatepath = "./template"
-		}
-		PageShowLimit, ok := os.LookupEnv("PAGE_SHOW_LIMIT")
-		if ok {
-			value, err := strconv.Atoi(PageShowLimit)
-			if err != nil || value <= 0 {
-				log.Printf("Warning: Environment variable 'PAGE_SHOW_LIMIT' is '%s' which is not a positive integer; Using default value %d.", PageShowLimit, DEFAULT_PAGE_SHOW_LIMIT)
-				Config.PageShowLimit = DEFAULT_PAGE_SHOW_LIMIT
-			} else {
-				Config.PageShowLimit = value
-			}
-		} else {
-			Config.PageShowLimit = DEFAULT_PAGE_SHOW_LIMIT
-		}
-		Timezone, ok := os.LookupEnv("TIMEZONE")
-		if ok {
-			Config.Timezone = Timezone
-		} else {
-			Config.Timezone = "UTC"
-		}
-		CategoryTagName, ok := os.LookupEnv("CATEGORY_TAG_NAME")
-		if ok {
-			Config.CategoryTagName = CategoryTagName
-		} else {
-			Config.CategoryTagName = "Category"
-		}
-		TimeArchiveName, ok := os.LookupEnv("TIME_ARCHIVE_NAME")
-		if ok {
-			Config.TimeArchiveName = TimeArchiveName
-		} else {
-			Config.TimeArchiveName = "Archive"
-		}
-	}
-
-	tz, err := time.LoadLocation(Config.Timezone)
+	cfg, err := LoadConfig()
 	if err != nil {
-		log.Fatal("Error: Invalid timezone: " + Config.Timezone)
+		log.Panic(err)
 	}
-
-	// 設定値出力
-	log.Print("Configuration values:")
-	log.Print("AssetsDirName: " + Config.AssetsDirName)
-	log.Print("Exportpath: " + Config.Exportpath)
-	log.Print("PageShowLimit: " + strconv.Itoa(Config.PageShowLimit))
-	log.Print("Templatepath: " + Config.Templatepath)
-	log.Print("Timezone: " + Config.Timezone)
-	log.Print("---------------")
 
 	// -----------------
 	// テンプレート存在確認
 	// -----------------
-	if !FileExists(Config.Templatepath) || !FileExists(Config.Templatepath+"/article.html") || !FileExists(Config.Templatepath+"/index.html") {
-		log.Fatal("Error: Missing templates. You must prepare \"article.html\" and \"index.html\" inside ./" + Config.Templatepath + ".")
+	if !FileExists(cfg.Templatepath) || !FileExists(cfg.Templatepath+"/article.html") || !FileExists(cfg.Templatepath+"/index.html") {
+		log.Fatal("Error: Missing templates. You must prepare \"article.html\" and \"index.html\" inside ./" + cfg.Templatepath + ".")
 	}
 
 	// ---------------
 	// 出力フォルダ再生成
 	// ---------------
-	if FileExists(Config.Exportpath) {
+	if FileExists(cfg.Exportpath) {
 		log.Print(">> Removing existing export directory")
-		if err := os.RemoveAll(Config.Exportpath); err != nil {
+		if err := os.RemoveAll(cfg.Exportpath); err != nil {
 			log.Panic(err)
 		}
 	}
 
 	// コンポーネント一覧を取得(なければディレクトリだけ生成)
-	var componentDirPath = Config.Templatepath + componentsDirPath
+	var componentDirPath = cfg.Templatepath + componentsDirPath
 	componentFiles, err := os.ReadDir(componentDirPath)
 	if err != nil {
 		log.Print("Warning: Components directory not found. The directory will be automatically generated.")
@@ -222,17 +122,20 @@ func main() {
 	}
 
 	log.Print(">> Generating export directory")
-	os.MkdirAll(Config.Exportpath+"/articles/category/", 0777)
+	os.MkdirAll(cfg.Exportpath+"/articles/category/", 0777)
 
 	// TODO
 	// .mbignoreに記載されたファイル：除外
 	// 記載されていないhtmlファイル：レンダリング（レンダリングされる部分がない場合はそのファイルがコピーされる挙動にする）
 	// 記載されていない非htmlファイル：コピー（画像やCSSなど）
-	// config.jsonにテンプレートの拡張子を指定できるようにしてもいいかも　デフォルトはhtml
+	// cfg.jsonにテンプレートの拡張子を指定できるようにしてもいいかも　デフォルトはhtml
 	// componentsディレクトリも除外対象ではあるので、ここらへんをもう少しわかりやすい形にしたい
 
+	// （仮）アセットコピー（otiai10/copyを使う）
+	copy.Copy(cfg.AssetsDirName, cfg.Exportpath+"/assets")
+
 	// microcms用クライアントインスタンス生成
-	client := microcms.New(Config.Servicedomain, Config.Apikey)
+	client := microcms.New(cfg.Servicedomain, cfg.Apikey)
 
 	// 先にミニマムなlatest用のやつ落としてcontent数(totalCount)を取得できるようにしておく
 	var articlesLatest ArticleList
@@ -249,7 +152,7 @@ func main() {
 	}
 
 	// 最新記事のJSONを保存
-	articlesFile, err := os.Create(Config.Exportpath + "/latest.json")
+	articlesFile, err := os.Create(cfg.Exportpath + "/latest.json")
 	if err != nil {
 		log.Panic(err)
 	}
@@ -262,7 +165,7 @@ func main() {
 	articlesFile.WriteString(string(s))
 
 	contentsCount := articlesLatest.Totalcount
-	pageLimit := Config.PageShowLimit
+	pageLimit := cfg.PageShowLimit
 	loopsCount := int(math.Ceil(float64(contentsCount) / float64(pageLimit)))
 
 	// -----------------------------------
@@ -270,7 +173,7 @@ func main() {
 	// -----------------------------------
 
 	// ヘルパー関数
-	functionMapping := HelperFunctionsMapping(tz)
+	functionMapping := HelperFunctionsMapping(cfg.Tz)
 
 	log.Print(">> Rendering start ")
 
@@ -300,13 +203,13 @@ func main() {
 		articlesPart.IsIndex = true
 
 		// トップページ(index.html)レンダリング
-		plusIdx := append([]string{Config.Templatepath + "/index.html"}, componentFilesName...)
+		plusIdx := append([]string{cfg.Templatepath + "/index.html"}, componentFilesName...)
 		indexTemplate := template.Must(template.New("index.html").Funcs(functionMapping).ParseFiles(plusIdx...))
 		var outputFilePath string
 		if i == 0 {
-			outputFilePath = Config.Exportpath + "/index.html"
+			outputFilePath = cfg.Exportpath + "/index.html"
 		} else {
-			outputBasePath := Config.Exportpath + "/page/" + strconv.Itoa(i+1)
+			outputBasePath := cfg.Exportpath + "/page/" + strconv.Itoa(i+1)
 			os.MkdirAll(outputBasePath, 0755)
 			outputFilePath = outputBasePath + "/index.html"
 		}
@@ -326,9 +229,9 @@ func main() {
 		for a := 0; a < len(articlesPart.Articles); a++ {
 			wgArticles.Add(1)
 			go func(i int, a int) {
-				plusAtc := append([]string{Config.Templatepath + "/article.html"}, componentFilesName...)
+				plusAtc := append([]string{cfg.Templatepath + "/article.html"}, componentFilesName...)
 				articleTemplate := template.Must(template.New("article.html").Funcs(functionMapping).ParseFiles(plusAtc...))
-				outputFilePath := Config.Exportpath + "/articles/" + articlesPart.Articles[a].ID + ".html"
+				outputFilePath := cfg.Exportpath + "/articles/" + articlesPart.Articles[a].ID + ".html"
 				articleOutputFile, err := os.Create(outputFilePath)
 				if err != nil {
 					log.Panic(err)
@@ -368,7 +271,7 @@ func main() {
 	}
 
 	// カテゴリのJSONを保存
-	categoriesFile, err := os.Create(Config.Exportpath + "/category.json")
+	categoriesFile, err := os.Create(cfg.Exportpath + "/category.json")
 	if err != nil {
 		log.Panic(err)
 	}
@@ -405,7 +308,7 @@ func main() {
 			contentsCount := categoryArticlesMinimum.Totalcount
 			loopsCount := int(math.Ceil(float64(contentsCount) / float64(pageLimit)))
 
-			categoryOutputBasePath := Config.Exportpath + "/articles/category/" + categoryID
+			categoryOutputBasePath := cfg.Exportpath + "/articles/category/" + categoryID
 			os.MkdirAll(categoryOutputBasePath, 0755)
 
 			for i := 0; i < loopsCount; i++ {
@@ -428,10 +331,10 @@ func main() {
 				categoryArticlesPart.AllPage = loopsCount
 				categoryArticlesPart.Root = "/articles/category/" + categoryID + "/"
 				categoryArticlesPart.IsIndex = false
-				categoryArticlesPart.ArchiveName = Config.CategoryTagName + ": " + categories[c].Name
+				categoryArticlesPart.ArchiveName = cfg.CategoryTagName + ": " + categories[c].Name
 
 				// カテゴリのトップページ(index.html)レンダリング
-				plusCatIdx := append([]string{Config.Templatepath + "/index.html"}, componentFilesName...)
+				plusCatIdx := append([]string{cfg.Templatepath + "/index.html"}, componentFilesName...)
 				categoryIndexTemplate := template.Must(template.New("index.html").Funcs(functionMapping).ParseFiles(plusCatIdx...))
 				var categoryOutputFilePath string
 				if i == 0 {

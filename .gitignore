@@ -22,4 +22,6 @@ config.json
 copyassets.json
 output/
 template/
-.mbignore
+templates/
+static/
+*.env

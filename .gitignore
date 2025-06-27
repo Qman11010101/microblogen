@@ -19,7 +19,6 @@ go.work
 
 # my add
 output/
-template/
 templates/
 static/
 *.env

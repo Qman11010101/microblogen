@@ -15,9 +15,6 @@ import (
 	"github.com/otiai10/copy"
 )
 
-const cfgFile = "cfg.json"
-
-// const copyAssetsFile = "copyassets.json"
 const VERSION = "2.0.0"
 
 const componentsDirPath = "/components"
@@ -69,8 +66,6 @@ const (
 	DEFAULT_LATEST_ARTICLES = 5
 	FREE_CONTENTS_LIMIT     = 10000
 )
-
-// main section
 
 func main() {
 	err := godotenv.Load()

@@ -358,19 +358,21 @@ func main() {
 	// Singlesページの描画
 	var singleTemplates []string
 
-	filepath.WalkDir(cfg.Paths.SinglesTemplatesPath, func(path string, d fs.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-		if d.IsDir() {
-			return nil
-		}
-		if filepath.Ext(path) != ".html" {
-			return nil
-		}
-		singleTemplates = append(singleTemplates, path)
+if err := filepath.WalkDir(cfg.Paths.SinglesTemplatesPath, func(path string, d fs.DirEntry, err error) error {
+	if err != nil {
+		return err
+	}
+	if d.IsDir() {
 		return nil
-	})
+	}
+	if filepath.Ext(path) != ".html" {
+		return nil
+	}
+	singleTemplates = append(singleTemplates, path)
+	return nil
+}); err != nil {
+	log.Panic(err)
+}
 
 	var wgSingles sync.WaitGroup
 	singlesCounter := 0

@@ -161,6 +161,14 @@ func main() {
 	helperCtx := HelperContext{Tz: cfg.Tz}
 	functionMapping := HelperFunctionsMapping(helperCtx)
 
+	log.Print(">> Parsing templates")
+	// テンプレートを事前にパース
+	plusIdx := append([]string{cfg.Paths.BlogTemplatesPath + "/index.html"}, componentFilesName...)
+	indexTemplate := template.Must(template.New("index.html").Funcs(functionMapping).ParseFiles(plusIdx...))
+
+	plusAtc := append([]string{cfg.Paths.BlogTemplatesPath + "/article.html"}, componentFilesName...)
+	articleTemplate := template.Must(template.New("article.html").Funcs(functionMapping).ParseFiles(plusAtc...))
+
 	log.Print(">> Rendering start ")
 
 	var mu sync.Mutex
@@ -189,8 +197,6 @@ func main() {
 		articlesPart.IsIndex = true
 
 		// トップページ(index.html)レンダリング
-		plusIdx := append([]string{cfg.Paths.BlogTemplatesPath + "/index.html"}, componentFilesName...)
-		indexTemplate := template.Must(template.New("index.html").Funcs(functionMapping).ParseFiles(plusIdx...))
 		var outputFilePath string
 		if i == 0 {
 			outputFilePath = cfg.Paths.ExportPath + "/index.html"
@@ -215,8 +221,6 @@ func main() {
 		for a := 0; a < len(articlesPart.Articles); a++ {
 			wgArticles.Add(1)
 			go func(i int, a int) {
-				plusAtc := append([]string{cfg.Paths.BlogTemplatesPath + "/article.html"}, componentFilesName...)
-				articleTemplate := template.Must(template.New("article.html").Funcs(functionMapping).ParseFiles(plusAtc...))
 				outputFilePath := cfg.Paths.ExportPath + "/articles/" + articlesPart.Articles[a].ID + ".html"
 				articleOutputFile, err := os.Create(outputFilePath)
 				if err != nil {
@@ -320,8 +324,6 @@ func main() {
 				categoryArticlesPart.ArchiveName = cfg.CategoryTagName + ": " + categories[c].Name
 
 				// カテゴリのトップページ(index.html)レンダリング
-				plusCatIdx := append([]string{cfg.Paths.BlogTemplatesPath + "/index.html"}, componentFilesName...)
-				categoryIndexTemplate := template.Must(template.New("index.html").Funcs(functionMapping).ParseFiles(plusCatIdx...))
 				var categoryOutputFilePath string
 				if i == 0 {
 					categoryOutputFilePath = categoryOutputBasePath + "/index.html"
@@ -336,7 +338,7 @@ func main() {
 				}
 				defer indexOutputFile.Close()
 
-				if err := categoryIndexTemplate.Execute(indexOutputFile, categoryArticlesPart); err != nil {
+				if err := indexTemplate.Execute(indexOutputFile, categoryArticlesPart); err != nil {
 					log.Panic(err)
 				}
 			}
@@ -358,21 +360,21 @@ func main() {
 	// Singlesページの描画
 	var singleTemplates []string
 
-if err := filepath.WalkDir(cfg.Paths.SinglesTemplatesPath, func(path string, d fs.DirEntry, err error) error {
-	if err != nil {
-		return err
-	}
-	if d.IsDir() {
+	if err := filepath.WalkDir(cfg.Paths.SinglesTemplatesPath, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.IsDir() {
+			return nil
+		}
+		if filepath.Ext(path) != ".html" {
+			return nil
+		}
+		singleTemplates = append(singleTemplates, path)
 		return nil
+	}); err != nil {
+		log.Panic(err)
 	}
-	if filepath.Ext(path) != ".html" {
-		return nil
-	}
-	singleTemplates = append(singleTemplates, path)
-	return nil
-}); err != nil {
-	log.Panic(err)
-}
 
 	var wgSingles sync.WaitGroup
 	singlesCounter := 0

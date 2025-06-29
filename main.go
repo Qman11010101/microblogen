@@ -60,13 +60,6 @@ type CategoryList struct {
 	Limit      int        `json:"limit,omitempty"`
 }
 
-// Magic numbers
-const (
-	DEFAULT_PAGE_SHOW_LIMIT = 10
-	DEFAULT_LATEST_ARTICLES = 5
-	FREE_CONTENTS_LIMIT     = 10000
-)
-
 func main() {
 	err := godotenv.Load()
 	if err != nil {
@@ -84,22 +77,22 @@ func main() {
 	// -----------------
 	// テンプレート存在確認
 	// -----------------
-	if !FileExists(cfg.Templatepath) || !FileExists(cfg.Templatepath+"/article.html") || !FileExists(cfg.Templatepath+"/index.html") {
-		log.Fatal("Error: Missing templates. You must prepare \"article.html\" and \"index.html\" inside ./" + cfg.Templatepath + ".")
+	if !FileExists(cfg.Paths.TemplatesPath) || !FileExists(cfg.Paths.BlogTemplatesPath+"/article.html") || !FileExists(cfg.Paths.BlogTemplatesPath+"/index.html") {
+		log.Fatal("Error: Missing templates. You must prepare \"article.html\" and \"index.html\" inside ./" + cfg.Paths.BlogTemplatesPath + ".")
 	}
 
 	// ---------------
 	// 出力フォルダ再生成
 	// ---------------
-	if FileExists(cfg.Exportpath) {
+	if FileExists(cfg.Paths.ExportPath) {
 		log.Print(">> Removing existing export directory")
-		if err := os.RemoveAll(cfg.Exportpath); err != nil {
+		if err := os.RemoveAll(cfg.Paths.ExportPath); err != nil {
 			log.Panic(err)
 		}
 	}
 
 	// コンポーネント一覧を取得(なければディレクトリだけ生成)
-	var componentDirPath = cfg.Templatepath + componentsDirPath
+	var componentDirPath = cfg.Paths.TemplatesPath + componentsDirPath
 	componentFiles, err := os.ReadDir(componentDirPath)
 	if err != nil {
 		log.Print("Warning: Components directory not found. The directory will be automatically generated.")
@@ -109,7 +102,6 @@ func main() {
 	}
 
 	var componentFilesName []string
-
 	for _, file := range componentFiles {
 		if !file.IsDir() {
 			componentFilesName = append(componentFilesName, componentDirPath+"/"+file.Name())
@@ -117,20 +109,15 @@ func main() {
 	}
 
 	log.Print(">> Generating export directory")
-	os.MkdirAll(cfg.Exportpath+"/articles/category/", 0777)
+	os.MkdirAll(cfg.Paths.ExportPath+"/articles/category/", 0777)
 
 	// TODO
-	// .mbignoreに記載されたファイル：除外
-	// 記載されていないhtmlファイル：レンダリング（レンダリングされる部分がない場合はそのファイルがコピーされる挙動にする）
-	// 記載されていない非htmlファイル：コピー（画像やCSSなど）
-	// cfg.jsonにテンプレートの拡張子を指定できるようにしてもいいかも　デフォルトはhtml
-	// componentsディレクトリも除外対象ではあるので、ここらへんをもう少しわかりやすい形にしたい
-
-	// （仮）アセットコピー（otiai10/copyを使う）
-	copy.Copy(cfg.AssetsDirName, cfg.Exportpath+"/assets")
+	// staticフォルダ内のコピーを行う
+	log.Print(">> Copying static assets to export directory")
+	copy.Copy(cfg.Paths.StaticPath, cfg.Paths.ExportPath)
 
 	// microcms用クライアントインスタンス生成
-	client := microcms.New(cfg.Servicedomain, cfg.Apikey)
+	client := microcms.New(cfg.ServiceDomain, cfg.Apikey)
 
 	// 先にミニマムなlatest用のやつ落としてcontent数(totalCount)を取得できるようにしておく
 	var articlesLatest ArticleList
@@ -139,7 +126,7 @@ func main() {
 		microcms.ListParams{
 			Endpoint: "article",
 			Fields:   []string{"id", "title", "publishedAt", "updatedAt", "category.id", "category.name"},
-			Limit:    DEFAULT_LATEST_ARTICLES,
+			Limit:    cfg.LatestArticles,
 			Orders:   []string{"-publishedAt"},
 		}, &articlesLatest,
 	); err != nil {
@@ -147,7 +134,7 @@ func main() {
 	}
 
 	// 最新記事のJSONを保存
-	articlesFile, err := os.Create(cfg.Exportpath + "/latest.json")
+	articlesFile, err := os.Create(cfg.Paths.ExportPath + "/latest.json")
 	if err != nil {
 		log.Panic(err)
 	}
@@ -161,7 +148,7 @@ func main() {
 
 	contentsCount := articlesLatest.Totalcount
 	pageLimit := cfg.PageShowLimit
-	loopsCount := int(math.Ceil(float64(contentsCount) / float64(pageLimit)))
+	actualPageCount := int(math.Ceil(float64(contentsCount) / float64(pageLimit)))
 
 	// -----------------------------------
 	// メインページ(index.html)/記事ページ生成
@@ -176,8 +163,8 @@ func main() {
 	var mu sync.Mutex
 	articleCounter := 0
 
-	for i := 0; i < loopsCount; i++ {
-		log.Print("Rendering mainpage ", i+1, " / ", loopsCount)
+	for i := 0; i < actualPageCount; i++ {
+		log.Print("Rendering mainpage ", i+1, " / ", actualPageCount)
 		var articlesPart ArticleList
 
 		if err := client.List(
@@ -194,18 +181,18 @@ func main() {
 
 		articlesPart.NextPage = i + 2
 		articlesPart.PrevPage = i
-		articlesPart.AllPage = loopsCount
+		articlesPart.AllPage = actualPageCount
 		articlesPart.Root = "/"
 		articlesPart.IsIndex = true
 
 		// トップページ(index.html)レンダリング
-		plusIdx := append([]string{cfg.Templatepath + "/index.html"}, componentFilesName...)
+		plusIdx := append([]string{cfg.Paths.BlogTemplatesPath + "/index.html"}, componentFilesName...)
 		indexTemplate := template.Must(template.New("index.html").Funcs(functionMapping).ParseFiles(plusIdx...))
 		var outputFilePath string
 		if i == 0 {
-			outputFilePath = cfg.Exportpath + "/index.html"
+			outputFilePath = cfg.Paths.ExportPath + "/index.html"
 		} else {
-			outputBasePath := cfg.Exportpath + "/page/" + strconv.Itoa(i+1)
+			outputBasePath := cfg.Paths.ExportPath + "/page/" + strconv.Itoa(i+1)
 			os.MkdirAll(outputBasePath, 0755)
 			outputFilePath = outputBasePath + "/index.html"
 		}
@@ -225,9 +212,9 @@ func main() {
 		for a := 0; a < len(articlesPart.Articles); a++ {
 			wgArticles.Add(1)
 			go func(i int, a int) {
-				plusAtc := append([]string{cfg.Templatepath + "/article.html"}, componentFilesName...)
+				plusAtc := append([]string{cfg.Paths.BlogTemplatesPath + "/article.html"}, componentFilesName...)
 				articleTemplate := template.Must(template.New("article.html").Funcs(functionMapping).ParseFiles(plusAtc...))
-				outputFilePath := cfg.Exportpath + "/articles/" + articlesPart.Articles[a].ID + ".html"
+				outputFilePath := cfg.Paths.ExportPath + "/articles/" + articlesPart.Articles[a].ID + ".html"
 				articleOutputFile, err := os.Create(outputFilePath)
 				if err != nil {
 					log.Panic(err)
@@ -259,7 +246,7 @@ func main() {
 		microcms.ListParams{
 			Endpoint: "category",
 			Fields:   []string{"id", "name"},
-			Limit:    FREE_CONTENTS_LIMIT,
+			Limit:    cfg.MgNum.FreeContentsLimit,
 		},
 		&categoriesList,
 	); err != nil {
@@ -267,7 +254,7 @@ func main() {
 	}
 
 	// カテゴリのJSONを保存
-	categoriesFile, err := os.Create(cfg.Exportpath + "/category.json")
+	categoriesFile, err := os.Create(cfg.Paths.ExportPath + "/category.json")
 	if err != nil {
 		log.Panic(err)
 	}
@@ -293,7 +280,7 @@ func main() {
 				microcms.ListParams{
 					Endpoint: "article",
 					Fields:   []string{"id"},
-					Limit:    FREE_CONTENTS_LIMIT,
+					Limit:    cfg.MgNum.FreeContentsLimit,
 					Orders:   []string{"-publishedAt"},
 					Filters:  "category[contains]" + categoryID,
 				}, &categoryArticlesMinimum,
@@ -304,7 +291,7 @@ func main() {
 			contentsCount := categoryArticlesMinimum.Totalcount
 			loopsCount := int(math.Ceil(float64(contentsCount) / float64(pageLimit)))
 
-			categoryOutputBasePath := cfg.Exportpath + "/articles/category/" + categoryID
+			categoryOutputBasePath := cfg.Paths.ExportPath + "/articles/category/" + categoryID
 			os.MkdirAll(categoryOutputBasePath, 0755)
 
 			for i := 0; i < loopsCount; i++ {
@@ -330,7 +317,7 @@ func main() {
 				categoryArticlesPart.ArchiveName = cfg.CategoryTagName + ": " + categories[c].Name
 
 				// カテゴリのトップページ(index.html)レンダリング
-				plusCatIdx := append([]string{cfg.Templatepath + "/index.html"}, componentFilesName...)
+				plusCatIdx := append([]string{cfg.Paths.BlogTemplatesPath + "/index.html"}, componentFilesName...)
 				categoryIndexTemplate := template.Must(template.New("index.html").Funcs(functionMapping).ParseFiles(plusCatIdx...))
 				var categoryOutputFilePath string
 				if i == 0 {
@@ -360,6 +347,13 @@ func main() {
 	}
 
 	wgCategories.Wait()
+
+	// ----------------
+	// Singlesページ生成
+	// ----------------
+	log.Print(">> Rendering singles pages")
+	// TODO: Singlesページの描画
+	// templates/singles/* -> output/* になるよう構造を保持
 
 	log.Print("Rendering done!")
 }

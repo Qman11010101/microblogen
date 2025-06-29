@@ -168,7 +168,8 @@ func main() {
 	// -----------------------------------
 
 	// ヘルパー関数
-	functionMapping := HelperFunctionsMapping(cfg.Tz)
+	helperCtx := HelperContext{Tz: cfg.Tz}
+	functionMapping := HelperFunctionsMapping(helperCtx)
 
 	log.Print(">> Rendering start ")
 

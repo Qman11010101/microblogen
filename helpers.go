@@ -9,12 +9,17 @@ import (
 	"time"
 )
 
-func HelperFunctionsMapping(cfg *Config) template.FuncMap {
+// HelperContext はヘルパー関数が必要とする外部情報を保持します。
+type HelperContext struct {
+	Tz *time.Location
+}
+
+func HelperFunctionsMapping(ctx HelperContext) template.FuncMap {
 	// htmlTagTrimReg is a regex to remove HTML tags from a string.
 	htmlTagTrimReg := regexp.MustCompile(`<[^>]*>`)
 
 	return template.FuncMap{
-		"formatTime":   func(t time.Time) string { return t.In(cfg.Tz).Format("2006-01-02") },
+		"formatTime":   func(t time.Time) string { return t.In(ctx.Tz).Format("2006-01-02") },
 		"totalGreater": func(total, limit int) bool { return total > limit },
 		"isNotFirst":   func(offset int) bool { return offset != 0 },
 		"isNotLast":    func(limit, offset, total int) bool { return limit+offset < total },
@@ -22,9 +27,10 @@ func HelperFunctionsMapping(cfg *Config) template.FuncMap {
 			r := []rune(htmlTagTrimReg.ReplaceAllString(body, ""))
 			return string(r[:int(math.Min(100, float64(len(r))))]) + "…"
 		},
-		"sub":         func(a, b int) int { return a - b },
-		"replaceWebp": func(body string) string { return convertWebp(body) },
-		"buildTime":   func() string { return strconv.FormatInt(time.Now().Unix(), 10) },
+		"sub":           func(a, b int) int { return a - b },
+		"replaceWebp":   func(body string) string { return convertWebp(body) },
+		"buildTime":     func() string { return strconv.FormatInt(time.Now().Unix(), 10) },
+		"getTotalPages": getTotalPages,
 	}
 }
 
@@ -44,4 +50,12 @@ func convertWebp(html string) string {
 	})
 
 	return convertedHTML
+}
+
+// getTotalPages はアイテムの総数と1ページあたりのアイテム数から総ページ数を計算します。
+func getTotalPages(totalItems, itemsPerPage int) int {
+	if itemsPerPage <= 0 {
+		return 0 // ゼロ除算を防ぐ
+	}
+	return (totalItems + itemsPerPage - 1) / itemsPerPage
 }

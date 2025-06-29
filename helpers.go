@@ -57,5 +57,5 @@ func getTotalPages(totalItems, itemsPerPage int) int {
 	if itemsPerPage <= 0 {
 		return 0 // ゼロ除算を防ぐ
 	}
-	return int(math.Ceil(float64(totalItems) / float64(itemsPerPage)))
+	return (totalItems + itemsPerPage - 1) / itemsPerPage
 }

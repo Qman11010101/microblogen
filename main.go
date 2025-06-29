@@ -5,10 +5,13 @@ import (
 	"log"
 	"math"
 	"os"
+	"path/filepath"
 	"strconv"
 	"sync"
 	"text/template"
 	"time"
+
+	"io/fs"
 
 	"github.com/joho/godotenv"
 	"github.com/microcmsio/microcms-go-sdk"
@@ -352,8 +355,61 @@ func main() {
 	// Singlesページ生成
 	// ----------------
 	log.Print(">> Rendering singles pages")
-	// TODO: Singlesページの描画
-	// templates/singles/* -> output/* になるよう構造を保持
+	// Singlesページの描画
+	var singleTemplates []string
+
+	filepath.WalkDir(cfg.Paths.SinglesTemplatesPath, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.IsDir() {
+			return nil
+		}
+		if filepath.Ext(path) != ".html" {
+			return nil
+		}
+		singleTemplates = append(singleTemplates, path)
+		return nil
+	})
+
+	var wgSingles sync.WaitGroup
+	singlesCounter := 0
+	for _, tmplPath := range singleTemplates {
+		relPath, err := filepath.Rel(cfg.Paths.SinglesTemplatesPath, tmplPath)
+		if err != nil {
+			log.Panic(err)
+		}
+
+		wgSingles.Add(1)
+		go func(tmplPath, relPath string) {
+			plusSingle := append([]string{tmplPath}, componentFilesName...)
+			singleTemplate := template.Must(template.New(filepath.Base(tmplPath)).Funcs(functionMapping).ParseFiles(plusSingle...))
+
+			outputFilePath := filepath.Join(cfg.Paths.ExportPath, relPath)
+			os.MkdirAll(filepath.Dir(outputFilePath), 0755)
+			outFile, err := os.Create(outputFilePath)
+			if err != nil {
+				log.Panic(err)
+			}
+			defer outFile.Close()
+
+			data := struct {
+				Latest     []Article
+				Categories []Category
+			}{articlesLatest.Articles, categoriesList.Categories}
+
+			if err := singleTemplate.Execute(outFile, data); err != nil {
+				log.Panic(err)
+			}
+
+			mu.Lock()
+			singlesCounter++
+			log.Print("Rendered single ", singlesCounter, " / ", len(singleTemplates), " '", relPath, "'")
+			mu.Unlock()
+			wgSingles.Done()
+		}(tmplPath, relPath)
+	}
+	wgSingles.Wait()
 
 	log.Print("Rendering done!")
 }

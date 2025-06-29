@@ -9,12 +9,12 @@ import (
 	"time"
 )
 
-func HelperFunctionsMapping(tz *time.Location) template.FuncMap {
+func HelperFunctionsMapping(cfg *Config) template.FuncMap {
 	// htmlTagTrimReg is a regex to remove HTML tags from a string.
 	htmlTagTrimReg := regexp.MustCompile(`<[^>]*>`)
 
 	return template.FuncMap{
-		"formatTime":   func(t time.Time) string { return t.In(tz).Format("2006-01-02") },
+		"formatTime":   func(t time.Time) string { return t.In(cfg.Tz).Format("2006-01-02") },
 		"totalGreater": func(total, limit int) bool { return total > limit },
 		"isNotFirst":   func(offset int) bool { return offset != 0 },
 		"isNotLast":    func(limit, offset, total int) bool { return limit+offset < total },

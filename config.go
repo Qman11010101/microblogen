@@ -7,87 +7,120 @@ import (
 	"time"
 )
 
-type ConfigStruct struct {
+const (
+	DEFAULT_PAGE_SHOW_LIMIT = 10
+	DEFAULT_LATEST_ARTICLES = 5
+
+	DEFAULT_EXPORT_PATH            = "./output"
+	DEFAULT_TEMPLATES_PATH         = "./templates"
+	DEFAULT_COMPONENTS_PATH        = "./templates/components"
+	DEFAULT_BLOG_TEMPLATES_PATH    = "./templates/blog"
+	DEFAULT_SINGLES_TEMPLATES_PATH = "./templates/singles"
+	DEFAULT_STATIC_PATH            = "./static"
+
+	DEFAULT_CATEGORY_TAG_NAME = "Category"
+	DEFAULT_TIME_ARCHIVE_NAME = "Archive"
+)
+
+type MagicNumber struct {
+	FreeContentsLimit int
+}
+
+type Paths struct {
+	ExportPath           string
+	TemplatesPath        string
+	ComponentsPath       string
+	BlogTemplatesPath    string
+	SinglesTemplatesPath string
+	StaticPath           string
+}
+
+type Config struct {
 	Apikey          string
-	Servicedomain   string
-	Exportpath      string
-	Templatepath    string
-	AssetsDirName   string
+	ServiceDomain   string
 	PageShowLimit   int
 	Timezone        string
 	CategoryTagName string
 	TimeArchiveName string
 	Tz              *time.Location
+
+	Paths          Paths
+	LatestArticles int
+	MgNum          MagicNumber
 }
 
-func LoadConfig() (ConfigStruct, error) {
-	// --------------
-	// 環境変数読み込み
-	// --------------
-	var Config ConfigStruct
+func getEnvOrFatal(key string) string {
+	value, ok := os.LookupEnv(key)
+	if !ok {
+		log.Fatalf("Error: Environment variable '%s' not found.", key)
+	}
+	return value
+}
+
+// ジェネリクス対応のgetEnvOrDefault
+func getEnvOrDefault[T any](key string, def T) T {
+	value, ok := os.LookupEnv(key)
+	if !ok {
+		return def
+	}
+
+	var result any
+	switch any(def).(type) {
+	case int:
+		v, err := strconv.Atoi(value)
+		if err != nil {
+			return def
+		}
+		result = v
+	case bool:
+		v, err := strconv.ParseBool(value)
+		if err != nil {
+			return def
+		}
+		result = v
+	case float64:
+		v, err := strconv.ParseFloat(value, 64)
+		if err != nil {
+			return def
+		}
+		result = v
+	case string:
+		return any(value).(T)
+	default:
+		return def
+	}
+	return result.(T)
+}
+
+func LoadConfig() (Config, error) {
+	var Config Config
+	var Paths Paths
 
 	log.Print("Loading the setting values from environment variables")
 
-	Apikey, ok := os.LookupEnv("MICROCMS_API_KEY")
-	if ok {
-		Config.Apikey = Apikey
-	} else {
-		log.Fatal("Error: Environment variable 'MICROCMS_API_KEY' not found.")
-	}
+	Config.Apikey = getEnvOrFatal("MICROCMS_API_KEY")
+	Config.ServiceDomain = getEnvOrFatal("SERVICE_DOMAIN")
 
-	Servicedomain, ok := os.LookupEnv("SERVICE_DOMAIN")
-	if ok {
-		Config.Servicedomain = Servicedomain
-	} else {
-		log.Fatal("Error: Environment variable 'SERVICE_DOMAIN' not found.")
-	}
+	Paths.ExportPath = getEnvOrDefault("EXPORT_PATH", DEFAULT_EXPORT_PATH)
+	Paths.TemplatesPath = getEnvOrDefault("TEMPLATES_PATH", DEFAULT_TEMPLATES_PATH)
+	Paths.ComponentsPath = getEnvOrDefault("COMPONENTS_PATH", DEFAULT_COMPONENTS_PATH)
+	Paths.BlogTemplatesPath = getEnvOrDefault("BLOG_TEMPLATES_PATH", DEFAULT_BLOG_TEMPLATES_PATH)
+	Paths.SinglesTemplatesPath = getEnvOrDefault("SINGLES_TEMPLATES_PATH", DEFAULT_SINGLES_TEMPLATES_PATH)
+	Paths.StaticPath = getEnvOrDefault("STATIC_PATH", DEFAULT_STATIC_PATH)
 
-	Exportpath, ok := os.LookupEnv("EXPORT_PATH")
-	if ok {
-		Config.Exportpath = Exportpath
-	} else {
-		Config.Exportpath = "./output"
-	}
-
-	Templatepath, ok := os.LookupEnv("TEMPLATE_PATH")
-	if ok {
-		Config.Templatepath = Templatepath
-	} else {
-		Config.Templatepath = "./template"
-	}
-
-	PageShowLimit, ok := os.LookupEnv("PAGE_SHOW_LIMIT")
-	if ok {
-		value, err := strconv.Atoi(PageShowLimit)
-		if err != nil || value <= 0 {
-			log.Printf("Warning: Environment variable 'PAGE_SHOW_LIMIT' is '%s' which is not a positive integer; Using default value %d.", PageShowLimit, DEFAULT_PAGE_SHOW_LIMIT)
-			Config.PageShowLimit = DEFAULT_PAGE_SHOW_LIMIT
-		} else {
-			Config.PageShowLimit = value
-		}
-	} else {
+	PageShowLimit := getEnvOrDefault("PAGE_SHOW_LIMIT", DEFAULT_PAGE_SHOW_LIMIT)
+	if PageShowLimit <= 0 {
 		Config.PageShowLimit = DEFAULT_PAGE_SHOW_LIMIT
+	} else {
+		Config.PageShowLimit = PageShowLimit
 	}
 
-	Timezone, ok := os.LookupEnv("TIMEZONE")
-	if ok {
-		Config.Timezone = Timezone
-	} else {
-		Config.Timezone = "UTC"
-	}
-
-	CategoryTagName, ok := os.LookupEnv("CATEGORY_TAG_NAME")
-	if ok {
-		Config.CategoryTagName = CategoryTagName
-	} else {
-		Config.CategoryTagName = "Category"
-	}
-
-	TimeArchiveName, ok := os.LookupEnv("TIME_ARCHIVE_NAME")
-	if ok {
-		Config.TimeArchiveName = TimeArchiveName
-	} else {
-		Config.TimeArchiveName = "Archive"
+	Config.Timezone = getEnvOrDefault("TIMEZONE", "UTC")
+	Config.CategoryTagName = getEnvOrDefault("CATEGORY_TAG_NAME", DEFAULT_CATEGORY_TAG_NAME)
+	Config.TimeArchiveName = getEnvOrDefault("TIME_ARCHIVE_NAME", DEFAULT_TIME_ARCHIVE_NAME)
+	Config.LatestArticles = getEnvOrDefault("LATEST_ARTICLES", DEFAULT_LATEST_ARTICLES)
+	Config.MgNum = MagicNumber{
+		FreeContentsLimit: 10000,
 	}
 
 	tz, err := time.LoadLocation(Config.Timezone)
@@ -95,12 +128,14 @@ func LoadConfig() (ConfigStruct, error) {
 		log.Fatal("Error: Invalid timezone: " + Config.Timezone)
 	}
 
+	Config.Paths = Paths
+
 	// 設定値出力
 	log.Print("Configuration values:")
-	log.Print("AssetsDirName: " + Config.AssetsDirName)
-	log.Print("Exportpath: " + Config.Exportpath)
+	log.Print("AssetsDirName: " + Config.Paths.StaticPath)
+	log.Print("Exportpath: " + Config.Paths.ExportPath)
 	log.Print("PageShowLimit: " + strconv.Itoa(Config.PageShowLimit))
-	log.Print("Templatepath: " + Config.Templatepath)
+	log.Print("Templatepath: " + Config.Paths.TemplatesPath)
 	log.Print("Timezone: " + Config.Timezone)
 	log.Print("---------------")
 

@@ -2,6 +2,8 @@ package main
 
 import (
 	"encoding/json"
+	"flag"
+	"fmt"
 	"log"
 	"math"
 	"os"
@@ -64,6 +66,15 @@ type CategoryList struct {
 }
 
 func main() {
+	var verFlag bool
+	flag.BoolVar(&verFlag, "version", false, "show version")
+	flag.Parse()
+
+	if verFlag {
+		fmt.Println("microblogen v" + VERSION)
+		os.Exit(0)
+	}
+
 	err := godotenv.Load()
 	if err != nil {
 		log.Fatal("Error loading .env file")

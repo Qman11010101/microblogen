@@ -120,7 +120,12 @@ func main() {
 	copy.Copy(cfg.Paths.StaticPath, cfg.Paths.ExportPath)
 
 	// microcms用クライアントインスタンス生成
-	client := microcms.New(cfg.ServiceDomain, cfg.Apikey)
+	// client := microcms.New(cfg.ServiceDomain, cfg.Apikey)
+	// The following line is modified for testing purposes.
+	// It allows replacing the client with a mock.
+	// In a real application, this would typically be handled by dependency injection.
+	client := newMicroCMSClient(cfg.ServiceDomain, cfg.Apikey)
+
 
 	// 先にミニマムなlatest用のやつ落としてcontent数(totalCount)を取得できるようにしておく
 	var articlesLatest ArticleList

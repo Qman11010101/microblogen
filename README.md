@@ -15,26 +15,10 @@ go build
 ```
 
 ## 使い方
-設定ファイル `config.json` を準備するか、もしくは同等の値を環境変数で設定した上で
-以下のように実行します。
+必要な値を環境変数で設定した上で以下のように実行します。
 
 ```bash
 ./microblogen
-```
-
-### config.json の例
-```json
-{
-  "APIkey": "YOUR_API_KEY",
-  "serviceDomain": "YOUR_SERVICE_DOMAIN",
-  "exportPath": "./output",
-  "templatePath": "./template",
-  "assetsDirName": "assets",
-  "pageShowLimit": 10,
-  "timezone": "Asia/Tokyo",
-  "categoryTagName": "Category",
-  "timeArchiveName": "Archive"
-}
 ```
 
 ### 使用可能な環境変数

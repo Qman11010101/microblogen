@@ -15,26 +15,10 @@ go build
 ```
 
 ## Usage
-Prepare the configuration file `config.json` or set equivalent values as environment variables,
-then execute as follows:
+Set the required values as environment variables, then execute as follows:
 
 ```bash
 ./microblogen
-```
-
-### Example of `config.json`
-```json
-{
-  "APIkey": "YOUR_API_KEY",
-  "serviceDomain": "YOUR_SERVICE_DOMAIN",
-  "exportPath": "./output",
-  "templatePath": "./template",
-  "assetsDirName": "assets",
-  "pageShowLimit": 10,
-  "timezone": "Asia/Tokyo",
-  "categoryTagName": "Category",
-  "timeArchiveName": "Archive"
-}
 ```
 
 ### Available Environment Variables

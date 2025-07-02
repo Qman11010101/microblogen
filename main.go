@@ -41,9 +41,9 @@ type Body struct {
 	Body    string `json:"body"`
 }
 type Category struct {
-	ID    string `json:"id"`
-	Name  string `json:"name"`
-	Count int
+	ID   string `json:"id"`
+	Name string `json:"name"`
+	// Count int
 }
 type Article struct {
 	ID          string     `json:"id,omitempty"`
@@ -136,7 +136,6 @@ func main() {
 	log.Print(">> Generating export directory")
 	os.MkdirAll(cfg.Paths.ExportPath+"/articles/category/", 0777)
 
-	// TODO
 	// staticフォルダ内のコピーを行う
 	log.Print(">> Copying static assets to export directory")
 	copy.Copy(cfg.Paths.StaticPath, cfg.Paths.ExportPath)
@@ -184,7 +183,7 @@ func main() {
 	functionMapping := HelperFunctionsMapping(helperCtx)
 
 	log.Print(">> Parsing templates")
-	// テンプレートを事前にパース
+
 	plusIdx := append([]string{cfg.Paths.BlogTemplatesPath + "/index.html"}, componentFilesName...)
 	indexTemplate := template.Must(template.New("index.html").Funcs(functionMapping).ParseFiles(plusIdx...))
 
@@ -282,20 +281,6 @@ func main() {
 		log.Panic(err)
 	}
 
-	// カテゴリのJSONを保存
-	categoriesFile, err := os.Create(cfg.Paths.ExportPath + "/category.json")
-	if err != nil {
-		log.Panic(err)
-	}
-	defer categoriesFile.Close()
-
-	log.Print(categoriesList.Categories)
-	x, err := json.Marshal(categoriesList.Categories)
-	if err != nil {
-		log.Panic(err)
-	}
-	categoriesFile.WriteString(string(x))
-
 	// カテゴリレンダリング
 	categories := categoriesList.Categories
 	var wgCategories sync.WaitGroup
@@ -305,6 +290,7 @@ func main() {
 		go func(c int) {
 			var categoryArticlesMinimum ArticleList
 			categoryID := categories[c].ID
+			categoryName := categories[c].Name
 
 			if err := client.List(
 				microcms.ListParams{
@@ -319,6 +305,15 @@ func main() {
 			}
 
 			contentsCount := categoryArticlesMinimum.Totalcount
+			if contentsCount == 0 {
+				mu.Lock()
+				categoryCounter++
+				categoriesList.Categories = append(categoriesList.Categories[:c], categoriesList.Categories[c+1:]...) // categoriesList.Categoriesから削除
+				mu.Unlock()
+				log.Print("No articles found in category ", categoryCounter, " / ", len(categories), " '", categoryID, "'. Skipped rendering.")
+				wgCategories.Done()
+				return
+			}
 			loopsCount := int(math.Ceil(float64(contentsCount) / float64(pageLimit)))
 
 			categoryOutputBasePath := cfg.Paths.ExportPath + "/articles/category/" + categoryID
@@ -344,7 +339,7 @@ func main() {
 				categoryArticlesPart.AllPage = loopsCount
 				categoryArticlesPart.Root = "/articles/category/" + categoryID + "/"
 				categoryArticlesPart.IsIndex = false
-				categoryArticlesPart.ArchiveName = cfg.CategoryTagName + ": " + categories[c].Name
+				categoryArticlesPart.ArchiveName = cfg.CategoryTagName + ": " + categoryName
 
 				// カテゴリのトップページ(index.html)レンダリング
 				var categoryOutputFilePath string
@@ -375,6 +370,19 @@ func main() {
 	}
 
 	wgCategories.Wait()
+
+	// カテゴリのJSONを保存
+	categoriesFile, err := os.Create(cfg.Paths.ExportPath + "/category.json")
+	if err != nil {
+		log.Panic(err)
+	}
+	defer categoriesFile.Close()
+
+	x, err := json.Marshal(categoriesList.Categories)
+	if err != nil {
+		log.Panic(err)
+	}
+	categoriesFile.WriteString(string(x))
 
 	// ----------------
 	// Singlesページ生成

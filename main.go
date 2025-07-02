@@ -1,19 +1,13 @@
 package main
 
 import (
-	"encoding/json"
 	"flag"
 	"fmt"
 	"log"
 	"math"
 	"os"
-	"path/filepath"
-	"strconv"
-	"sync"
 	"text/template"
 	"time"
-
-	"io/fs"
 
 	"github.com/joho/godotenv"
 	"github.com/microcmsio/microcms-go-sdk"

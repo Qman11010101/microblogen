@@ -4,12 +4,12 @@ import (
 	"encoding/json"
 	"io/fs"
 	"log"
-	"text/template"
 	"math"
 	"os"
 	"path/filepath"
 	"strconv"
 	"sync"
+	"text/template"
 
 	"github.com/microcmsio/microcms-go-sdk"
 )

@@ -75,30 +75,41 @@ func main() {
 		os.Exit(0)
 	}
 
-	err := godotenv.Load()
-	if err != nil {
-		log.Fatal("Error loading .env file")
-	}
+	_ = godotenv.Load()
 
 	log.SetFlags(log.Ltime)
 	log.Print("microblogen v" + VERSION)
 
+	log.Print(">> Loading the setting values from environment variables")
 	cfg, err := LoadConfig()
 	if err != nil {
 		log.Panic(err)
 	}
 
-	// -----------------
-	// テンプレート存在確認
-	// -----------------
-	if !FileExists(cfg.Paths.TemplatesPath) || !FileExists(cfg.Paths.BlogTemplatesPath+"/article.html") || !FileExists(cfg.Paths.BlogTemplatesPath+"/index.html") {
-		log.Fatal("Error: Missing templates. You must prepare \"article.html\" and \"index.html\" inside ./" + cfg.Paths.BlogTemplatesPath + ".")
+	if !PathExists(cfg.Paths.ResourcesPath) {
+		// リソースディレクトリが存在しない場合は作成して終了
+		log.Print("Resources directory not found. Creating resources directory at " + cfg.Paths.ResourcesPath)
+		if err := os.MkdirAll(cfg.Paths.StaticPath, 0755); err != nil {
+			log.Panic(err)
+		}
+		if err := os.MkdirAll(cfg.Paths.BlogTemplatesPath, 0755); err != nil {
+			log.Panic(err)
+		}
+		if err := os.MkdirAll(cfg.Paths.SinglesTemplatesPath, 0755); err != nil {
+			log.Panic(err)
+		}
+		if err := os.MkdirAll(cfg.Paths.ComponentsPath, 0755); err != nil {
+			log.Panic(err)
+		}
+		log.Print("Resources directory created successfully.")
+		log.Print("Please prepare the templates and static files in the resources directory.")
+		os.Exit(0)
 	}
 
 	// ---------------
 	// 出力フォルダ再生成
 	// ---------------
-	if FileExists(cfg.Paths.ExportPath) {
+	if PathExists(cfg.Paths.ExportPath) {
 		log.Print(">> Removing existing export directory")
 		if err := os.RemoveAll(cfg.Paths.ExportPath); err != nil {
 			log.Panic(err)
@@ -161,7 +172,7 @@ func main() {
 	articlesFile.WriteString(string(s))
 
 	contentsCount := articlesLatest.Totalcount
-	pageLimit := cfg.PageShowLimit
+	pageLimit := cfg.ArticlesPerPage
 	actualPageCount := int(math.Ceil(float64(contentsCount) / float64(pageLimit)))
 
 	// -----------------------------------
@@ -264,7 +275,7 @@ func main() {
 		microcms.ListParams{
 			Endpoint: "category",
 			Fields:   []string{"id", "name"},
-			Limit:    cfg.MgNum.FreeContentsLimit,
+			Limit:    10000,
 		},
 		&categoriesList,
 	); err != nil {
@@ -278,6 +289,7 @@ func main() {
 	}
 	defer categoriesFile.Close()
 
+	log.Print(categoriesList.Categories)
 	x, err := json.Marshal(categoriesList.Categories)
 	if err != nil {
 		log.Panic(err)
@@ -298,7 +310,7 @@ func main() {
 				microcms.ListParams{
 					Endpoint: "article",
 					Fields:   []string{"id"},
-					Limit:    cfg.MgNum.FreeContentsLimit,
+					Limit:    10000,
 					Orders:   []string{"-publishedAt"},
 					Filters:  "category[contains]" + categoryID,
 				}, &categoryArticlesMinimum,

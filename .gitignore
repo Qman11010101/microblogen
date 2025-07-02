@@ -19,6 +19,5 @@ go.work
 
 # my add
 output/
-templates/
-static/
+resources/
 *.env

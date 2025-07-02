@@ -148,25 +148,11 @@ func main() {
 	}
 
 	// 最新記事のJSONを保存
-	articlesFile, err := os.Create(cfg.Paths.ExportPath + "/latest.json")
-	if err != nil {
-		log.Panic(err)
-	}
-	defer articlesFile.Close()
-
-	s, err := json.Marshal(articlesLatest.Articles)
-	if err != nil {
-		log.Panic(err)
-	}
-	articlesFile.WriteString(string(s))
+	saveLatestArticlesJSON(cfg, articlesLatest)
 
 	contentsCount := articlesLatest.Totalcount
 	pageLimit := cfg.PageShowLimit
 	actualPageCount := int(math.Ceil(float64(contentsCount) / float64(pageLimit)))
-
-	// -----------------------------------
-	// メインページ(index.html)/記事ページ生成
-	// -----------------------------------
 
 	// ヘルパー関数
 	helperCtx := HelperContext{Tz: cfg.Tz}
@@ -182,84 +168,25 @@ func main() {
 
 	log.Print(">> Rendering start ")
 
-	var mu sync.Mutex
-	articleCounter := 0
-
-	for i := 0; i < actualPageCount; i++ {
-		log.Print("Rendering mainpage ", i+1, " / ", actualPageCount)
-		var articlesPart ArticleList
-
-		if err := client.List(
-			microcms.ListParams{
-				Endpoint: "article",
-				Fields:   []string{"id", "title", "event", "body", "publishedAt", "updatedAt", "category.id", "category.name"},
-				Limit:    pageLimit,
-				Offset:   pageLimit * i,
-				Orders:   []string{"-publishedAt"},
-			}, &articlesPart,
-		); err != nil {
-			log.Panic(err)
-		}
-
-		articlesPart.NextPage = i + 2
-		articlesPart.PrevPage = i
-		articlesPart.AllPage = actualPageCount
-		articlesPart.Root = "/"
-		articlesPart.IsIndex = true
-
-		// トップページ(index.html)レンダリング
-		var outputFilePath string
-		if i == 0 {
-			outputFilePath = cfg.Paths.ExportPath + "/index.html"
-		} else {
-			outputBasePath := cfg.Paths.ExportPath + "/page/" + strconv.Itoa(i+1)
-			os.MkdirAll(outputBasePath, 0755)
-			outputFilePath = outputBasePath + "/index.html"
-		}
-		indexOutputFile, err := os.Create(outputFilePath)
-		if err != nil {
-			log.Panic(err)
-		}
-		defer indexOutputFile.Close()
-
-		if err := indexTemplate.Execute(indexOutputFile, articlesPart); err != nil {
-			log.Panic(err)
-		}
-
-		// 記事レンダリング
-		var wgArticles sync.WaitGroup
-
-		for a := 0; a < len(articlesPart.Articles); a++ {
-			wgArticles.Add(1)
-			go func(i int, a int) {
-				outputFilePath := cfg.Paths.ExportPath + "/articles/" + articlesPart.Articles[a].ID + ".html"
-				articleOutputFile, err := os.Create(outputFilePath)
-				if err != nil {
-					log.Panic(err)
-				}
-				defer articleOutputFile.Close()
-
-				if err := articleTemplate.Execute(articleOutputFile, articlesPart.Articles[a]); err != nil {
-					log.Panic(err)
-				}
-
-				mu.Lock()
-				articleCounter++
-				log.Print("- Rendered articles ", articleCounter, " / ", articlesPart.Totalcount)
-				mu.Unlock()
-				wgArticles.Done()
-			}(i, a)
-		}
-		wgArticles.Wait()
-	}
+	// -----------------------------------
+	// メインページ(index.html)/記事ページ生成
+	// -----------------------------------
+	renderMainPagesAndArticles(
+		cfg,
+		client,
+		indexTemplate,
+		articleTemplate,
+		articlesLatest,
+		actualPageCount,
+		pageLimit,
+		componentFilesName,
+		functionMapping,
+	)
 
 	// ---------------
 	// カテゴリページ生成
 	// ---------------
-
-	// カテゴリ(タグ)の構造体
 	var categoriesList CategoryList
-
 	if err := client.List(
 		microcms.ListParams{
 			Endpoint: "category",
@@ -272,159 +199,26 @@ func main() {
 	}
 
 	// カテゴリのJSONを保存
-	categoriesFile, err := os.Create(cfg.Paths.ExportPath + "/category.json")
-	if err != nil {
-		log.Panic(err)
-	}
-	defer categoriesFile.Close()
+	saveCategoriesJSON(cfg, categoriesList)
 
-	x, err := json.Marshal(categoriesList.Categories)
-	if err != nil {
-		log.Panic(err)
-	}
-	categoriesFile.WriteString(string(x))
-
-	// カテゴリレンダリング
-	categories := categoriesList.Categories
-	var wgCategories sync.WaitGroup
-	categoryCounter := 0
-	for c := 0; c < len(categories); c++ {
-		wgCategories.Add(1)
-		go func(c int) {
-			var categoryArticlesMinimum ArticleList
-			categoryID := categories[c].ID
-
-			if err := client.List(
-				microcms.ListParams{
-					Endpoint: "article",
-					Fields:   []string{"id"},
-					Limit:    cfg.MgNum.FreeContentsLimit,
-					Orders:   []string{"-publishedAt"},
-					Filters:  "category[contains]" + categoryID,
-				}, &categoryArticlesMinimum,
-			); err != nil {
-				log.Panic(err)
-			}
-
-			contentsCount := categoryArticlesMinimum.Totalcount
-			loopsCount := int(math.Ceil(float64(contentsCount) / float64(pageLimit)))
-
-			categoryOutputBasePath := cfg.Paths.ExportPath + "/articles/category/" + categoryID
-			os.MkdirAll(categoryOutputBasePath, 0755)
-
-			for i := 0; i < loopsCount; i++ {
-				var categoryArticlesPart ArticleList
-
-				if err := client.List(
-					microcms.ListParams{
-						Endpoint: "article",
-						Fields:   []string{"id", "title", "body", "event", "publishedAt", "updatedAt", "category.id", "category.name"},
-						Limit:    pageLimit,
-						Offset:   pageLimit * i,
-						Filters:  "category[contains]" + categoryID,
-					}, &categoryArticlesPart,
-				); err != nil {
-					log.Panic(err)
-				}
-
-				categoryArticlesPart.NextPage = i + 2
-				categoryArticlesPart.PrevPage = i
-				categoryArticlesPart.AllPage = loopsCount
-				categoryArticlesPart.Root = "/articles/category/" + categoryID + "/"
-				categoryArticlesPart.IsIndex = false
-				categoryArticlesPart.ArchiveName = cfg.CategoryTagName + ": " + categories[c].Name
-
-				// カテゴリのトップページ(index.html)レンダリング
-				var categoryOutputFilePath string
-				if i == 0 {
-					categoryOutputFilePath = categoryOutputBasePath + "/index.html"
-				} else {
-					basePath := categoryOutputBasePath + "/page/" + strconv.Itoa(i+1)
-					os.MkdirAll(basePath, 0755)
-					categoryOutputFilePath = basePath + "/index.html"
-				}
-				indexOutputFile, err := os.Create(categoryOutputFilePath)
-				if err != nil {
-					log.Panic(err)
-				}
-				defer indexOutputFile.Close()
-
-				if err := indexTemplate.Execute(indexOutputFile, categoryArticlesPart); err != nil {
-					log.Panic(err)
-				}
-			}
-
-			mu.Lock()
-			categoryCounter++
-			mu.Unlock()
-			log.Print("Rendered category ", categoryCounter, " / ", len(categories), " '"+categoryID+"'")
-			wgCategories.Done()
-		}(c)
-	}
-
-	wgCategories.Wait()
+	renderCategoryPages(
+		cfg,
+		client,
+		indexTemplate,
+		categoriesList,
+		pageLimit,
+	)
 
 	// ----------------
 	// Singlesページ生成
 	// ----------------
-	log.Print(">> Rendering singles pages")
-	// Singlesページの描画
-	var singleTemplates []string
-
-	if err := filepath.WalkDir(cfg.Paths.SinglesTemplatesPath, func(path string, d fs.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-		if d.IsDir() {
-			return nil
-		}
-		if filepath.Ext(path) != ".html" {
-			return nil
-		}
-		singleTemplates = append(singleTemplates, path)
-		return nil
-	}); err != nil {
-		log.Panic(err)
-	}
-
-	var wgSingles sync.WaitGroup
-	singlesCounter := 0
-	for _, tmplPath := range singleTemplates {
-		relPath, err := filepath.Rel(cfg.Paths.SinglesTemplatesPath, tmplPath)
-		if err != nil {
-			log.Panic(err)
-		}
-
-		wgSingles.Add(1)
-		go func(tmplPath, relPath string) {
-			plusSingle := append([]string{tmplPath}, componentFilesName...)
-			singleTemplate := template.Must(template.New(filepath.Base(tmplPath)).Funcs(functionMapping).ParseFiles(plusSingle...))
-
-			outputFilePath := filepath.Join(cfg.Paths.ExportPath, relPath)
-			os.MkdirAll(filepath.Dir(outputFilePath), 0755)
-			outFile, err := os.Create(outputFilePath)
-			if err != nil {
-				log.Panic(err)
-			}
-			defer outFile.Close()
-
-			data := struct {
-				Latest     []Article
-				Categories []Category
-			}{articlesLatest.Articles, categoriesList.Categories}
-
-			if err := singleTemplate.Execute(outFile, data); err != nil {
-				log.Panic(err)
-			}
-
-			mu.Lock()
-			singlesCounter++
-			log.Print("Rendered single ", singlesCounter, " / ", len(singleTemplates), " '", relPath, "'")
-			mu.Unlock()
-			wgSingles.Done()
-		}(tmplPath, relPath)
-	}
-	wgSingles.Wait()
+	renderSinglePages(
+		cfg,
+		articlesLatest,
+		categoriesList,
+		componentFilesName,
+		functionMapping,
+	)
 
 	log.Print("Rendering done!")
 }

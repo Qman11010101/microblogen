@@ -9,7 +9,10 @@ import (
 	"time"
 )
 
-// HelperContext はヘルパー関数が必要とする外部情報を保持します。
+// 
+var re = regexp.MustCompile(`<img[^>]*\bsrc\s*=\s*['"]?([^'">]+)['"]?[^>]*>`)
+
+// HelperContext contains the context for helper functions, such as timezone.
 type HelperContext struct {
 	Tz *time.Location
 }
@@ -68,8 +71,6 @@ func getPagination(current, allCount, pageRange int) []int {
 }
 
 func convertWebp(html string) string {
-	// HTMLからimgタグのsrc属性を抽出するための正規表現
-	re := regexp.MustCompile(`<img[^>]*\bsrc\s*=\s*['"]?([^'">]+)['"]?[^>]*>`)
 
 	// 正規表現を使ってimgタグのsrc属性を抽出し、条件に合致するURLに"?fm=webp"を付加して置換する
 	convertedHTML := re.ReplaceAllStringFunc(html, func(match string) string {

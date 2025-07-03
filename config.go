@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"os"
 	"strconv"
@@ -29,6 +30,7 @@ type Paths struct {
 	ExportPath    string
 	ResourcesPath string
 
+	// Derived paths
 	StaticPath           string
 	TemplatesPath        string
 	ComponentsPath       string
@@ -122,7 +124,7 @@ func LoadConfig() (Config, error) {
 
 	tz, err := time.LoadLocation(Config.Timezone)
 	if err != nil {
-return Config, fmt.Errorf("invalid timezone: %s", Config.Timezone)
+		return Config, fmt.Errorf("invalid timezone: %s", Config.Timezone)
 	}
 
 	Config.Paths = Paths

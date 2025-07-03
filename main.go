@@ -112,6 +112,39 @@ func convertWebp(html string) string {
 	return convertedHTML
 }
 
+func getPagination(current, allCount, pageRange int) []int {
+	if allCount <= 0 || pageRange <= 0 {
+		return []int{}
+	}
+	if pageRange > allCount {
+		pageRange = allCount
+	}
+
+	half := pageRange / 2
+	start := current - half
+	end := current + half
+
+	// 左端に寄せる場合
+	if start < 1 {
+		start = 1
+		end = start + pageRange - 1
+	}
+	// 右端に寄せる場合
+	if end > allCount {
+		end = allCount
+		start = end - pageRange + 1
+		if start < 1 {
+			start = 1
+		}
+	}
+
+	result := make([]int, 0, end-start+1)
+	for i := start; i <= end; i++ {
+		result = append(result, i)
+	}
+	return result
+}
+
 // main section
 
 func main() {
@@ -332,6 +365,7 @@ func main() {
 		"sub":         func(a, b int) int { return a - b },
 		"replaceWebp": func(body string) string { return convertWebp(body) },
 		"buildTime":   func() string { return strconv.FormatInt(time.Now().Unix(), 10) },
+		"getPagination": getPagination,
 	}
 
 	log.Print(">> Rendering start ")
@@ -356,6 +390,7 @@ func main() {
 		}
 
 		articlesPart.NextPage = i + 2
+		articlesPart.CurrentPage = i + 1
 		articlesPart.PrevPage = i
 		articlesPart.AllPage = loopsCount
 		articlesPart.Root = "/"
@@ -486,6 +521,7 @@ func main() {
 				}
 
 				categoryArticlesPart.NextPage = i + 2
+				categoryArticlesPart.CurrentPage = i + 1
 				categoryArticlesPart.PrevPage = i
 				categoryArticlesPart.AllPage = loopsCount
 				categoryArticlesPart.Root = "/articles/category/" + categoryID + "/"

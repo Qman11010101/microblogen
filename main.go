@@ -291,6 +291,11 @@ func main() {
 	categories := categoriesList.Categories
 	var wgCategories sync.WaitGroup
 	categoryCounter := 0
+
+	// 削除対象カテゴリIDを格納するスライスとミューテックス
+	var noArticleCategoryIDs []string
+	var noArticleCategoryIDsMu sync.Mutex
+
 	for c := 0; c < len(categories); c++ {
 		wgCategories.Add(1)
 		go func(c int) {
@@ -312,9 +317,11 @@ func main() {
 
 			contentsCount := categoryArticlesMinimum.Totalcount
 			if contentsCount == 0 {
+				noArticleCategoryIDsMu.Lock()
+				noArticleCategoryIDs = append(noArticleCategoryIDs, categoryID)
+				noArticleCategoryIDsMu.Unlock()
 				mu.Lock()
 				categoryCounter++
-				categoriesList.Categories = append(categoriesList.Categories[:c], categoriesList.Categories[c+1:]...) // 記事がなければcategoriesList.Categoriesから削除
 				mu.Unlock()
 				log.Print("No articles found in category ", categoryCounter, " / ", len(categories), " '", categoryID, "'. Skipped rendering.")
 				wgCategories.Done()
@@ -377,6 +384,21 @@ func main() {
 	}
 
 	wgCategories.Wait()
+
+	// goroutine外でカテゴリスライスから記事がないカテゴリをまとめて削除
+	if len(noArticleCategoryIDs) > 0 {
+		filteredCategories := make([]Category, 0, len(categoriesList.Categories))
+		noArticleCategoryIDSet := make(map[string]struct{}, len(noArticleCategoryIDs))
+		for _, id := range noArticleCategoryIDs {
+			noArticleCategoryIDSet[id] = struct{}{}
+		}
+		for _, cat := range categoriesList.Categories {
+			if _, found := noArticleCategoryIDSet[cat.ID]; !found {
+				filteredCategories = append(filteredCategories, cat)
+			}
+		}
+		categoriesList.Categories = filteredCategories
+	}
 
 	// カテゴリのJSONを保存
 	categoriesFile, err := os.Create(cfg.Paths.ExportPath + "/category.json")
@@ -455,4 +477,3 @@ func main() {
 
 	log.Print("Rendering done!")
 }
-

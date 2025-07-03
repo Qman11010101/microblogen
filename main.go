@@ -35,6 +35,7 @@ type ArticleList struct {
 	Offset      int       `json:"offset"`
 	Limit       int       `json:"limit"`
 	NextPage    int
+	CurrentPage int
 	PrevPage    int
 	AllPage     int
 	Root        string
@@ -217,6 +218,7 @@ func main() {
 		}
 
 		articlesPart.NextPage = i + 2
+		articlesPart.CurrentPage = i + 1
 		articlesPart.PrevPage = i
 		articlesPart.AllPage = actualPageCount
 		articlesPart.Root = "/"
@@ -340,6 +342,7 @@ func main() {
 				}
 
 				categoryArticlesPart.NextPage = i + 2
+				categoryArticlesPart.CurrentPage = i + 1
 				categoryArticlesPart.PrevPage = i
 				categoryArticlesPart.AllPage = loopsCount
 				categoryArticlesPart.Root = "/articles/category/" + categoryID + "/"

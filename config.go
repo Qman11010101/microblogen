@@ -57,7 +57,7 @@ func getEnvOrFatal(key string) string {
 	return value
 }
 
-// ジェネリクス対応のgetEnvOrDefault
+// getEnvOrDefault gets a value from an environment variable or returns a default.
 func getEnvOrDefault[T any](key string, def T) T {
 	value, ok := os.LookupEnv(key)
 	if !ok {

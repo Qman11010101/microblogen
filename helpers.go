@@ -30,7 +30,6 @@ func HelperFunctionsMapping(ctx HelperContext) template.FuncMap {
 		"sub":           func(a, b int) int { return a - b },
 		"replaceWebp":   func(body string) string { return convertWebp(body) },
 		"buildTime":     func() string { return strconv.FormatInt(time.Now().Unix(), 10) },
-		"getTotalPages": getTotalPages,
 		"getPagination": getPagination,
 	}
 }
@@ -84,12 +83,4 @@ func convertWebp(html string) string {
 	})
 
 	return convertedHTML
-}
-
-// getTotalPages はアイテムの総数と1ページあたりのアイテム数から総ページ数を計算します。
-func getTotalPages(totalItems, itemsPerPage int) int {
-	if itemsPerPage <= 0 {
-		return 0 // ゼロ除算を防ぐ
-	}
-	return (totalItems + itemsPerPage - 1) / itemsPerPage
 }

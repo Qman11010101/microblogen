@@ -122,7 +122,7 @@ func LoadConfig() (Config, error) {
 
 	tz, err := time.LoadLocation(Config.Timezone)
 	if err != nil {
-		log.Fatal("Error: Invalid timezone: " + Config.Timezone)
+return Config, fmt.Errorf("invalid timezone: %s", Config.Timezone)
 	}
 
 	Config.Paths = Paths

@@ -1,4 +1,4 @@
-module github.com/Qman11010101/microblogen
+module github.com/Qman11010101/microblogen/v2
 
 go 1.20
 

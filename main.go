@@ -43,6 +43,7 @@ type ArticleList struct {
 	Offset      int       `json:"offset"`
 	Limit       int       `json:"limit"`
 	NextPage    int
+	CurrentPage int
 	PrevPage    int
 	AllPage     int
 	Root        string

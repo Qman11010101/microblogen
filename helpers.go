@@ -31,7 +31,41 @@ func HelperFunctionsMapping(ctx HelperContext) template.FuncMap {
 		"replaceWebp":   func(body string) string { return convertWebp(body) },
 		"buildTime":     func() string { return strconv.FormatInt(time.Now().Unix(), 10) },
 		"getTotalPages": getTotalPages,
+		"getPagination": getPagination,
 	}
+}
+
+func getPagination(current, allCount, pageRange int) []int {
+	if allCount <= 0 || pageRange <= 0 {
+		return []int{}
+	}
+	if pageRange > allCount {
+		pageRange = allCount
+	}
+
+	half := pageRange / 2
+	start := current - half
+	end := current + half
+
+	// 左端に寄せる場合
+	if start < 1 {
+		start = 1
+		end = start + pageRange - 1
+	}
+	// 右端に寄せる場合
+	if end > allCount {
+		end = allCount
+		start = end - pageRange + 1
+		if start < 1 {
+			start = 1
+		}
+	}
+
+	result := make([]int, 0, end-start+1)
+	for i := start; i <= end; i++ {
+		result = append(result, i)
+	}
+	return result
 }
 
 func convertWebp(html string) string {

@@ -49,7 +49,6 @@ type Body struct {
 type Category struct {
 	ID   string `json:"id"`
 	Name string `json:"name"`
-	// Count int
 }
 type Article struct {
 	ID          string     `json:"id,omitempty"`
@@ -456,3 +455,4 @@ func main() {
 
 	log.Print("Rendering done!")
 }
+

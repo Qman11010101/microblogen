@@ -24,6 +24,11 @@ const VERSION = "2.0.0"
 
 const componentsDirPath = "/components"
 
+const (
+	INDEX_HTML   = "index.html"
+	ARTICLE_HTML = "article.html"
+)
+
 type ArticleList struct {
 	Articles    []Article `json:"contents"`
 	Totalcount  int       `json:"totalCount"`
@@ -184,11 +189,11 @@ func main() {
 
 	log.Print(">> Parsing templates")
 
-	plusIdx := append([]string{cfg.Paths.BlogTemplatesPath + "/index.html"}, componentFilesName...)
-	indexTemplate := template.Must(template.New("index.html").Funcs(functionMapping).ParseFiles(plusIdx...))
+	plusIdx := append([]string{cfg.Paths.BlogTemplatesPath + "/" + INDEX_HTML}, componentFilesName...)
+	indexTemplate := template.Must(template.New(INDEX_HTML).Funcs(functionMapping).ParseFiles(plusIdx...))
 
-	plusAtc := append([]string{cfg.Paths.BlogTemplatesPath + "/article.html"}, componentFilesName...)
-	articleTemplate := template.Must(template.New("article.html").Funcs(functionMapping).ParseFiles(plusAtc...))
+	plusAtc := append([]string{cfg.Paths.BlogTemplatesPath + "/" + ARTICLE_HTML}, componentFilesName...)
+	articleTemplate := template.Must(template.New(ARTICLE_HTML).Funcs(functionMapping).ParseFiles(plusAtc...))
 
 	log.Print(">> Rendering start ")
 
@@ -220,11 +225,11 @@ func main() {
 		// トップページ(index.html)レンダリング
 		var outputFilePath string
 		if i == 0 {
-			outputFilePath = cfg.Paths.ExportPath + "/index.html"
+			outputFilePath = cfg.Paths.ExportPath + "/" + INDEX_HTML
 		} else {
 			outputBasePath := cfg.Paths.ExportPath + "/page/" + strconv.Itoa(i+1)
 			os.MkdirAll(outputBasePath, 0755)
-			outputFilePath = outputBasePath + "/index.html"
+			outputFilePath = outputBasePath + "/" + INDEX_HTML
 		}
 		indexOutputFile, err := os.Create(outputFilePath)
 		if err != nil {
@@ -308,7 +313,7 @@ func main() {
 			if contentsCount == 0 {
 				mu.Lock()
 				categoryCounter++
-				categoriesList.Categories = append(categoriesList.Categories[:c], categoriesList.Categories[c+1:]...) // categoriesList.Categoriesから削除
+				categoriesList.Categories = append(categoriesList.Categories[:c], categoriesList.Categories[c+1:]...) // 記事がなければcategoriesList.Categoriesから削除
 				mu.Unlock()
 				log.Print("No articles found in category ", categoryCounter, " / ", len(categories), " '", categoryID, "'. Skipped rendering.")
 				wgCategories.Done()
@@ -344,11 +349,11 @@ func main() {
 				// カテゴリのトップページ(index.html)レンダリング
 				var categoryOutputFilePath string
 				if i == 0 {
-					categoryOutputFilePath = categoryOutputBasePath + "/index.html"
+					categoryOutputFilePath = categoryOutputBasePath + "/" + INDEX_HTML
 				} else {
 					basePath := categoryOutputBasePath + "/page/" + strconv.Itoa(i+1)
 					os.MkdirAll(basePath, 0755)
-					categoryOutputFilePath = basePath + "/index.html"
+					categoryOutputFilePath = basePath + "/" + INDEX_HTML
 				}
 				indexOutputFile, err := os.Create(categoryOutputFilePath)
 				if err != nil {

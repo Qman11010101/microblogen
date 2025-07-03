@@ -20,9 +20,7 @@ import (
 	"github.com/otiai10/copy"
 )
 
-const VERSION = "2.0.0"
-
-const componentsDirPath = "/components"
+const VERSION = "2.0.1"
 
 const (
 	INDEX_HTML   = "index.html"
@@ -122,7 +120,7 @@ func main() {
 	}
 
 	// コンポーネント一覧を取得(なければディレクトリだけ生成)
-	var componentDirPath = cfg.Paths.TemplatesPath + componentsDirPath
+	var componentDirPath = cfg.Paths.ComponentsPath
 	componentFiles, err := os.ReadDir(componentDirPath)
 	if err != nil {
 		log.Print("Warning: Components directory not found. The directory will be automatically generated.")

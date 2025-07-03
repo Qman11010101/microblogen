@@ -27,8 +27,8 @@ go build
 | `MICROCMS_API_KEY` | microCMS の API キー (必須) | - |
 | `SERVICE_DOMAIN` | microCMS のサービスドメイン (必須) | - |
 | `EXPORT_PATH` | 出力ディレクトリ (任意) | `./output` |
-| `TEMPLATE_PATH` | テンプレートディレクトリ (任意) | `./template` |
-| `PAGE_SHOW_LIMIT` | 1 ページに表示する記事数 (任意) | `10` |
+| `RESOURCES_PATH` | テンプレートディレクトリ (任意) | `./resources` |
+| `ARTICLES_PER_PAGE` | 1 ページに表示する記事数 (任意) | `10` |
 | `TIMEZONE` | 日付のタイムゾーン (任意) | `UTC` |
 | `CATEGORY_TAG_NAME` | カテゴリ表示時のラベル (任意) | `Category` |
 | `TIME_ARCHIVE_NAME` | アーカイブ表示時のラベル (任意) | `Archive` |
